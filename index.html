@@ -1554,12 +1554,21 @@ let gDriveFileId = null;
 let gCalendars = [];
 let gTokenClient = null;
 let gapiReady = false;
-let gsiReady = false;
 let syncPending = false;
 
 // Init once APIs are loaded
 function initGoogleApis() {
   // Load GAPI
+  // Patch sv() to also save to Drive after every local save
+  const _origSv = sv;
+  sv = function() {
+    _origSv();
+    if (gToken && gapiReady) {
+      clearTimeout(window._driveSaveTimer);
+      window._driveSaveTimer = setTimeout(saveToDrive, 2000);
+    }
+  };
+
   gapi.load('client', function() {
     gapi.client.init({
       apiKey: '',
@@ -1582,7 +1591,9 @@ function tryAutoSignIn() {
       const tok = JSON.parse(saved);
       if (tok.expiry > Date.now()) {
         gToken = tok;
-        gapi.client.setToken({access_token: gToken.access_token});
+        if (typeof gapi !== 'undefined' && gapi.client) {
+          gapi.client.setToken({access_token: gToken.access_token});
+        }
         onSignedIn(tok.profile);
         return;
       }
@@ -1599,11 +1610,19 @@ function initTokenClient() {
     callback: onTokenResponse,
     error_callback: function(e) { console.warn('Token error:', e); }
   });
-  gsiReady = true;
 }
 
 function signIn() {
-  if (!gsiReady) { initTokenClient(); setTimeout(signIn, 600); return; }
+  // If token client not ready yet, init it and retry
+  if (!gTokenClient) {
+    if (typeof google !== 'undefined') {
+      initTokenClient();
+      setTimeout(signIn, 800);
+    } else {
+      setTimeout(signIn, 800);
+    }
+    return;
+  }
   gTokenClient.requestAccessToken({prompt: ''});
 }
 
@@ -1729,15 +1748,7 @@ async function saveToDrive() {
   }
 }
 
-// Override sv() to also save to Drive
-const _localSv = sv;
-function sv() {
-  _localSv();
-  if (gToken && gapiReady) {
-    clearTimeout(window._driveSaveTimer);
-    window._driveSaveTimer = setTimeout(saveToDrive, 2000); // debounce 2s
-  }
-}
+// sv() override is applied after DOM load (see initGoogleApis)
 
 function setSyncStatus(state, msg) {
   const el = document.getElementById('sync-status');
