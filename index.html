@@ -523,42 +523,42 @@ function rToday(){
   let advNudge='';
   if(realW!==w)advNudge='<div class="warn">📅 Real date puts you in '+periodWeekLabel(p,realW)+'. <button class="btn" style="margin-left:8px;font-size:11px;padding:3px 10px" onclick="goRealWeek()">Go to '+periodWeekLabel(p,realW)+'</button></div>';
 
-  // Build schedule html with block items
-  let tlHtml='';
-  if(blocks.length){
-    blocks.forEach(function(b){
-      const dur=(b.e-b.s)*15;const dh=Math.floor(dur/60),dm=dur%60;
-      const ds=dh>0?(dm?dh+'h '+dm+'m':dh+'h'):dm+'m';
-      const col=b.t==='strategic'?'var(--blue)':b.t==='buffer'?'var(--amber)':b.t==='breakout'?'var(--green)':b.t==='mit'?'#9B59B6':'rgba(0,0,0,.2)';
-      const bg=b.t==='strategic'?'var(--bbg)':b.t==='buffer'?'var(--abg)':b.t==='breakout'?'var(--gbg)':b.t==='mit'?'linear-gradient(135deg,#2D1B69,#4A2C8A)':'var(--bg2)';
-      let items='';
-      (b.sts||[]).forEach(function(raw){
-        if(raw.startsWith('tac:')){const tac=p.tactics.find(function(t){return t.id===raw.slice(4);});if(tac)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;color:'+(b.t==="mit"?"rgba(255,255,255,.85)":"var(--t2)")+';">• '+tac.text+'</div>';}
-        else{const td=D.todos.find(function(t){return t.id===raw;});if(td)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;color:'+(b.t==="mit"?"rgba(255,255,255,.85)":"var(--t2)")+';;'+(td.done?'text-decoration:line-through;opacity:.5':'')+'">• '+td.text+'</div>';}
-      });
-      tlHtml+='<div style="border-radius:8px;padding:7px 10px;margin-bottom:4px;background:'+bg+';border-left:4px solid '+col+'">'
-        +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:'+col+';color:#fff;flex-shrink:0">'+BTYPES[b.t].label+'</span>'
-          +'<span style="font-size:13px;font-weight:500;flex:1;'+(b.t==="mit"?"color:#fff;":"")+'">'+ b.title+'</span>'
-          +'<span style="font-size:11px;opacity:.8;'+(b.t==="mit"?"color:#fff;":"")+'">'+ SLOTS[b.s].label+' · '+ds+'</span>'
-        +'</div>'+items+'</div>';
+  // Build schedule: merge blocks + cal events sorted by start time
+  const schedItems=[];
+  blocks.forEach(function(b){
+    const dur=(b.e-b.s)*15;const dh=Math.floor(dur/60),dm=dur%60;
+    const ds=dh>0?(dm?dh+'h '+dm+'m':dh+'h'):dm+'m';
+    const col=b.t==='strategic'?'var(--blue)':b.t==='buffer'?'var(--amber)':b.t==='breakout'?'var(--green)':b.t==='mit'?'#9B59B6':'rgba(0,0,0,.2)';
+    const bg=b.t==='strategic'?'var(--bbg)':b.t==='buffer'?'var(--abg)':b.t==='breakout'?'var(--gbg)':b.t==='mit'?'linear-gradient(135deg,#2D1B69,#4A2C8A)':'var(--bg2)';
+    const mitC=b.t==='mit'?'color:#fff;':'';
+    let items='';
+    (b.sts||[]).forEach(function(raw){
+      if(raw.startsWith('tac:')){const tac=p.tactics.find(function(t){return t.id===raw.slice(4);});if(tac)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;'+(b.t==='mit'?'color:rgba(255,255,255,.85)':'color:var(--t2)')+'">• '+tac.text+'</div>';}
+      else{const td=D.todos.find(function(t){return t.id===raw;});if(td)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;'+(b.t==='mit'?'color:rgba(255,255,255,.85)':'color:var(--t2)')+(td.done?';text-decoration:line-through;opacity:.5':'')+'">• '+td.text+'</div>';}
     });
-  } else {
-    tlHtml='<div style="color:var(--t3);font-size:12px;padding:.5rem 0">No blocks planned — go to This Week → Daily Planner.</div>';
-  }
-  // Overlay Google Calendar events on Today schedule
+    schedItems.push({sortKey:b.s*15, html:'<div style="border-radius:8px;padding:7px 10px;margin-bottom:4px;background:'+bg+';border-left:4px solid '+col+';'+mitC+'">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:'+col+';color:#fff;flex-shrink:0">'+BTYPES[b.t].label+'</span>'
+        +'<span style="font-size:13px;font-weight:500;flex:1;'+mitC+'">'+b.title+'</span>'
+        +'<span style="font-size:11px;opacity:.8;'+mitC+'">'+SLOTS[b.s].label+' · '+ds+'</span>'
+      +'</div>'+items+'</div>'});
+  });
   if(D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]){
     D.calEvents[w][d].forEach(function(ev){
-      const timeStr=ev.allDay?'All day':new Date(ev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-      const endStr=ev.end&&!ev.allDay?' – '+new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
-      tlHtml+='<div style="border-radius:8px;padding:6px 10px;margin-bottom:3px;background:#fff;border-left:4px solid '+ev.color+';border:1px solid var(--bdr);display:flex;align-items:center;gap:8px">'
+      const startDt=new Date(ev.start);
+      const sk=ev.allDay?-1:startDt.getHours()*60+startDt.getMinutes();
+      const ts=ev.allDay?'All day':startDt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      const te=ev.end&&!ev.allDay?' – '+new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+      schedItems.push({sortKey:sk, html:'<div style="border-radius:8px;padding:6px 10px;margin-bottom:3px;background:#fff;border-left:4px solid '+ev.color+';border:1px solid var(--bdr);display:flex;align-items:center;gap:8px">'
         +'<span style="width:10px;height:10px;border-radius:50%;background:'+ev.color+';flex-shrink:0"></span>'
         +'<span style="font-size:13px;font-weight:500;flex:1">'+ev.title+'</span>'
-        +'<span style="font-size:11px;color:var(--t3)">'+timeStr+endStr+'</span>'
-      +'</div>';
+        +'<span style="font-size:11px;color:var(--t3)">'+ts+te+'</span>'
+      +'</div>'});
     });
   }
-  if(!tlHtml)tlHtml='<div style="color:var(--t3);font-size:12px;padding:.5rem 0">No blocks or events today — go to This Week → Daily Planner.</div>';
+  schedItems.sort(function(a,b){return a.sortKey-b.sortKey;});
+  let tlHtml=schedItems.map(function(i){return i.html;}).join('');
+  if(!tlHtml)tlHtml='<div style="color:var(--t3);font-size:12px;padding:.5rem 0">No blocks or events — go to This Week → Daily Planner.</div>';
 
   document.getElementById('page-today').innerHTML=
     advNudge
