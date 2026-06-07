@@ -2103,15 +2103,29 @@ function openWeeklyWizard() {
   let calHtml = '';
   for (let d = 0; d < 7; d++) {
     const evs = calEventsThisWeek[d] || [];
+    const blocks = getDayBlocks(w, d);
     calHtml += '<div style="font-size:11px;font-weight:600;color:var(--t2);margin-top:8px;padding-top:6px;border-top:1px solid var(--bdr)">' + DAYS[d] + '</div>';
+    // Show time blocks first
+    if (blocks.length) {
+      blocks.forEach(function(b) {
+        const sm = b.s * 15; const sh = Math.floor(sm/60), smin = sm%60;
+        const em = b.e * 15; const eh = Math.floor(em/60), emin = em%60;
+        const ts = (sh===0?12:sh>12?sh-12:sh) + ':' + smin.toString().padStart(2,'0') + ' ' + (sh<12?'AM':'PM');
+        const te = (eh===0?12:eh>12?eh-12:eh) + ':' + emin.toString().padStart(2,'0') + ' ' + (eh<12?'AM':'PM');
+        const col = b.t==='mit'?'#9B59B6':b.t==='strategic'?'var(--blue)':b.t==='buffer'?'var(--amber)':b.t==='breakout'?'var(--green)':'rgba(0,0,0,.2)';
+        calHtml += '<div class="cal-event"><div class="cal-dot" style="background:'+col+'"></div><div><div style="font-weight:500">['+BTYPES[b.t].label+'] '+b.title+'</div><div style="color:var(--t3)">'+ts+' – '+te+'</div></div></div>';
+      });
+    }
+    // Then show Google Calendar events
     if (evs.length) {
       evs.forEach(function(ev) {
         const start = ev.allDay ? 'All day' : new Date(ev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
         const end = ev.end && !ev.allDay ? ' – ' + new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
         calHtml += '<div class="cal-event"><div class="cal-dot" style="background:'+ev.color+'"></div><div><div style="font-weight:500">'+ev.title+'</div><div style="color:var(--t3)">'+start+end+'</div></div></div>';
       });
-    } else {
-      calHtml += '<div style="font-size:11px;color:var(--t3);padding:3px 0">No events</div>';
+    }
+    if (!blocks.length && !evs.length) {
+      calHtml += '<div style="font-size:11px;color:var(--t3);padding:3px 0">No blocks or events</div>';
     }
   }
 
