@@ -825,10 +825,10 @@ function rDayPlan(){
       }).join('');
       grid+=`<div class="trow ${sl.isHour?'hour':''}" id="sr-${i}" style="min-height:${Math.max(40,(b.e-b.s)*24)}px" ondragover="onDO(event,${i})" ondragleave="onDL(event)" ondrop="onDrop(event,${w},${d},${i})">
         <div class="tlbl ${sl.isHour?'oh':''}">${sl.label}</div>
-        <div class="tcell ${b.t}" style="padding:6px 8px;gap:3px">
+        <div class="tcell ${b.t}" style="padding:6px 8px;gap:3px;${b.t==='mit'?'color:#fff':''}">
           <div style="display:flex;align-items:center;gap:6px;width:100%">
             <span class="btag ${b.t}">${BTYPES[b.t].label}</span>
-            <span style="font-weight:600;font-size:12px;flex:1">${b.title}</span>
+            <span style="font-weight:600;font-size:12px;flex:1;${b.t==='mit'?'color:#fff':''}">${b.title}</span>
             <span style="font-size:11px;opacity:.6">${ds}</span>
             ${b.rec?'<span style="font-size:10px;opacity:.5">🔁</span>':''}
             <span onclick="rmBlock(${w},${d},${bi},event)" style="cursor:pointer;opacity:.45;font-size:15px;padding:0 2px">×</span>
