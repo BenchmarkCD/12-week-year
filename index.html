@@ -907,6 +907,23 @@ function rDayPlan(){
         <div class="card" style="padding:.75rem 1rem;max-height:220px;overflow-y:auto">
           ${activeTodos().length?sortTodos(activeTodos()).map(t=>`<div class="drag-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')"><span class="dh">⠿</span><div style="flex:1;min-width:0;word-break:break-word">${t.text}</div><span class="pri-pill ${priLabel(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span></div>`).join(''):'<div class="empty">No pending to-dos.</div>'}
         </div>
+        +(function(){
+          const evs=D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]?D.calEvents[w][d]:[];
+          if(!evs.length)return '';
+          const sorted=evs.slice().sort(function(a,b){return new Date(a.start)-new Date(b.start);});
+          return '<p class="lbl" style="margin-top:1rem">📅 Calendar events</p>'
+            +'<div class="card" style="padding:.75rem 1rem;max-height:200px;overflow-y:auto">'
+            +sorted.map(function(ev){
+              const ts=ev.allDay?'All day':new Date(ev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+              const te=ev.end&&!ev.allDay?' – '+new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+              return '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr)">'
+                +'<span style="width:10px;height:10px;border-radius:50%;background:'+ev.color+';flex-shrink:0;margin-top:3px"></span>'
+                +'<div style="flex:1"><div style="font-size:13px;font-weight:500">'+ev.title+'</div>'
+                +'<div style="font-size:11px;color:var(--t3)">'+ts+te+'</div></div>'
+              +'</div>';
+            }).join('')
+            +'</div>';
+        }())
       </div>
     </div>`;
 }
@@ -1953,12 +1970,18 @@ async function syncCalendarsIn() {
   // Log week 8 (current week) events for debugging
   const cw = getCW();
   console.log('Events for current week '+cw+':', D.calEvents && D.calEvents[cw] ? JSON.stringify(D.calEvents[cw]) : 'none');
-  // Re-render
+  // Re-render whichever view is active
   const activePage = document.querySelector('.page.active');
   if (activePage) {
     const pid = activePage.id;
     if (pid === 'page-today') rToday();
-    else if (pid === 'page-week') rWeek();
+    else if (pid === 'page-week') {
+      if (wSub === 'planner' && document.getElementById('dpc')) {
+        rDayPlan(); // refresh planner in-place without rebuilding whole page
+      } else {
+        rWeek();
+      }
+    }
   }
 }
 
@@ -2081,12 +2104,15 @@ function openWeeklyWizard() {
   let calHtml = '';
   for (let d = 0; d < 7; d++) {
     const evs = calEventsThisWeek[d] || [];
+    calHtml += '<div style="font-size:11px;font-weight:600;color:var(--t2);margin-top:8px;padding-top:6px;border-top:1px solid var(--bdr)">' + DAYS[d] + '</div>';
     if (evs.length) {
-      calHtml += '<div style="font-size:11px;font-weight:600;color:var(--t2);margin-top:8px">' + DAYS[d] + '</div>';
       evs.forEach(function(ev) {
         const start = ev.allDay ? 'All day' : new Date(ev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-        calHtml += '<div class="cal-event"><div class="cal-dot" style="background:'+ev.color+'"></div><div><div style="font-weight:500">'+ev.title+'</div><div style="color:var(--t3)">'+start+'</div></div></div>';
+        const end = ev.end && !ev.allDay ? ' – ' + new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
+        calHtml += '<div class="cal-event"><div class="cal-dot" style="background:'+ev.color+'"></div><div><div style="font-weight:500">'+ev.title+'</div><div style="color:var(--t3)">'+start+end+'</div></div></div>';
       });
+    } else {
+      calHtml += '<div style="font-size:11px;color:var(--t3);padding:3px 0">No events</div>';
     }
   }
 
@@ -2127,10 +2153,10 @@ function openWeeklyWizard() {
         + '</div>'
 
         // Step 4: Calendar this week
-        + (calHtml ? '<div style="margin-bottom:1rem">'
+        + '<div style="margin-bottom:1rem">'
           + '<div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📅 Already on Your Calendar</div>'
           + calHtml
-        + '</div>' : '')
+        + '</div>'
 
         // Step 5: Week notes
         + '<div style="margin-bottom:1rem">'
