@@ -311,6 +311,8 @@ function createPeriod(name,startDate,hasPlanWeek){
 function sv(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(e){}}
 let D=ld();
 if(!D.todos)D.todos=[];if(!D.someday)D.someday=[];if(!D.templates)D.templates=[];if(!D.brainDump)D.brainDump='';if(!D.oneThings)D.oneThings={};if(!D.streakCache)D.streakCache={};
+// Initialize order field for todos that don't have it
+D.todos.forEach(function(t,i){if(t.order===undefined)t.order=i;});
 if(!D.periods||!D.periods.length){const fp=createPeriod('Period 1',new Date(2026,3,5),false);fp.goals=[...DEFAULT_GOALS];D.periods=[fp];D.activePeriodId=fp.id;}
 
 function AP(){return D.periods.find(p=>p.id===D.activePeriodId)||D.periods[D.periods.length-1];}
@@ -377,7 +379,18 @@ function goalScore(p,gi){
 function getDayBlocks(w,d){const p=AP();return(p.blocks[w]&&p.blocks[w][d])||[];}
 function setDayBlocks(w,d,arr){const p=AP();if(!p.blocks[w])p.blocks[w]={};p.blocks[w][d]=arr;sv();}
 function activeTodos(){return D.todos.filter(t=>!t.done);}
-function sortTodos(arr){return arr.slice().sort(function(a,b){return(parseInt(a.pri)||3)-(parseInt(b.pri)||3);});}
+function sortTodos(arr){
+  return arr.slice().sort(function(a,b){
+    const pa=parseInt(a.pri||3), pb=parseInt(b.pri||3);
+    if(pa!==pb)return pa-pb;
+    return (a.order||0)-(b.order||0);
+  });
+}
+function normalizeTodoOrder(){
+  // Reassign sequential order values after any reorder
+  const sorted=sortTodos(D.todos.filter(function(t){return !t.done;}));
+  sorted.forEach(function(t,i){t.order=i;});
+}
 function randEnc(){return ENC[Math.floor(Math.random()*ENC.length)];}
 function toast(msg){const el=document.getElementById('toast-el');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600);}
 function celebrate(msg){
@@ -1004,35 +1017,48 @@ function onTodoListDL(event) {
 function onTodoListDrop(event, targetId) {
   event.preventDefault();
   event.stopPropagation();
-  document.querySelectorAll('.todo-item').forEach(function(el){el.style.borderTop='';el.style.borderBottom='';});
+  document.querySelectorAll('.todo-item').forEach(function(el){
+    el.style.borderTop='';el.style.borderBottom='';
+  });
   const raw = event.dataTransfer.getData('text/plain');
   const dragId = raw.startsWith('todo:') ? raw.slice(5) : raw;
   if (!dragId || dragId === targetId) return;
   const dragged = D.todos.find(function(t){return t.id===dragId;});
   const target = D.todos.find(function(t){return t.id===targetId;});
   if (!dragged || !target) return;
-  // Determine insert position (above or below target)
+
   const item = event.currentTarget;
   const rect = item.getBoundingClientRect();
   const insertBefore = event.clientY < (rect.top + rect.height / 2);
-  // Assign priority of the neighbor we're landing next to
-  // If dropping before target: adopt target's priority
-  // If dropping after target: adopt target's priority  
-  // If there's an item on the other side, pick whichever matches better
+
+  // Get the current sorted pending list
   const pending = sortTodos(D.todos.filter(function(t){return !t.done;}));
-  const targetPosInSorted = pending.findIndex(function(t){return t.id===targetId;});
-  let newPri = parseInt(target.pri||3);
-  if (!insertBefore && targetPosInSorted < pending.length - 1) {
-    // Dropping after target — use average of target and next item's priority
-    const nextItem = pending[targetPosInSorted + 1];
-    if (nextItem && nextItem.id !== dragId) {
-      const nextPri = parseInt(nextItem.pri||3);
-      newPri = Math.round((parseInt(target.pri||3) + nextPri) / 2);
+  const targetIdx = pending.findIndex(function(t){return t.id===targetId;});
+
+  // Determine new priority based on neighbors
+  const targetPri = parseInt(target.pri||3);
+  let newPri = targetPri;
+  if (!insertBefore) {
+    // Dropping AFTER target — check item below
+    const below = pending[targetIdx+1];
+    if (below && below.id !== dragId) {
+      const belowPri = parseInt(below.pri||3);
+      newPri = belowPri; // adopt the priority below
     }
   }
-  dragged.pri = String(Math.max(1, Math.min(5, newPri)));
-  // Reorder: remove from current position and let sortTodos handle display
-  // Just update priority — sortTodos will re-sort automatically
+  newPri = Math.max(1, Math.min(5, newPri));
+  dragged.pri = String(newPri);
+
+  // Assign order: squeeze dragged between neighbors
+  // Recalculate order for all items cleanly
+  // Remove dragged from pending, find target position, insert
+  const withoutDragged = pending.filter(function(t){return t.id!==dragId;});
+  const insertIdx = withoutDragged.findIndex(function(t){return t.id===targetId;});
+  const finalInsert = insertBefore ? insertIdx : insertIdx + 1;
+  withoutDragged.splice(finalInsert, 0, dragged);
+  // Assign sequential order values
+  withoutDragged.forEach(function(t,i){t.order=i;});
+
   sv();
   renderTSub();
 }
