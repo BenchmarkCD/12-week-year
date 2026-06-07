@@ -744,7 +744,7 @@ function rWeek(){
       <div><div style="font-size:15px;font-weight:700">${wlabel}<span class="period-badge">${p.name}</span></div><div style="font-size:12px;color:var(--t2)">${fd(wstart(w))} – ${fd(ddate(w,6))}</div></div>
       <div style="font-size:26px;font-weight:800;color:${sc>=85?'var(--green)':sc>=60?'var(--amber)':'var(--t2)'}">${sc}%</div>
     </div>
-    <div class="ws">${Array.from({length:wc},(_,i)=>{const lbl=p.hasPlanWeek?(i===0?'P':i===13?'R':i):(i===13?'R':i);const cls=i===getCW()?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===13?'w13':'';return`<button class="wb ${cls}" onclick="selW(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
+    <div class="ws">${Array.from({length:14},(_,i)=>{if(i===0&&!p.hasPlanWeek)return '';const lbl=i===0&&p.hasPlanWeek?'Plan':i===13?'R&R':String(i);const cls=i===getCW()?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===13?'w13':'';const mw=lbl.length>2?'44px':'36px';return`<button class="wb ${cls}" style="min-width:${mw}" onclick="selW(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
     <div style="margin-bottom:.75rem"><button class="btn green" style="width:100%;padding:9px;font-size:13px" onclick="openWeeklyWizard()">📋 Plan My Week</button></div>
     <div style="margin-bottom:1rem"><input type="text" value="${intention}" placeholder="This week I'm focused on… (weekly intention)" onchange="saveIntent(${w},this.value)" style="width:100%;padding:8px 12px;font-size:13px;border-radius:var(--rs);border:1px solid var(--bdr);background:#fff;color:inherit"></div>
     <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap" id="wsub-tabs">
