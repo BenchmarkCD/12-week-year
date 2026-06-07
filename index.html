@@ -697,10 +697,10 @@ function renderTSub(){
       <p class="lbl">Pending <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">· tap priority to cycle · drag into Daily Planner time blocks</span></p>
       <div class="card" style="padding:.75rem 1rem">
         ${sortTodos(pending).length?sortTodos(pending).map(t=>`
-          <div class="todo-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')">
+          <div class="todo-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')" ondragover="onTodoListDO(event)" ondrop="onTodoListDrop(event,'${t.id}')" ondragleave="onTodoListDL(event)">
             <span class="dh">⠿</span><div class="chk" onclick="completeTodo('${t.id}',this)"></div>
             <div style="flex:1;font-size:13px;min-width:0;word-break:break-word">${t.text}</div>
-            <span onclick="cyclePri('${t.id}')" class="pri-pill ${priLabel(parseInt(t.pri||3))}" title="Click to change priority">${priLabel(parseInt(t.pri||3))} ↕</span>
+            <select onchange="setPriority('${t.id}',this.value)" style="font-size:11px;padding:2px 2px;border-radius:4px;border:1px solid var(--bdr);background:#fff;width:44px;flex-shrink:0"><option value="1" ${parseInt(t.pri||3)===1?"selected":""}>P1</option><option value="2" ${parseInt(t.pri||3)===2?"selected":""}>P2</option><option value="3" ${parseInt(t.pri||3)===3?"selected":""}>P3</option><option value="4" ${parseInt(t.pri||3)===4?"selected":""}>P4</option><option value="5" ${parseInt(t.pri||3)===5?"selected":""}>P5</option></select>
             <span onclick="moveToSomeday('${t.id}')" title="Move to Someday" style="cursor:pointer;color:var(--t3);font-size:11px;padding:0 4px;flex-shrink:0">→</span>
             <span onclick="removeTodo('${t.id}')" style="cursor:pointer;color:var(--t3);font-size:16px;padding:0 4px;flex-shrink:0">×</span>
           </div>`).join(''):'<div class="empty">All caught up! ✓</div>'}
@@ -727,6 +727,14 @@ function priClass(n){return 'p'+(n>=1&&n<=5?n:3);}
 function priLabel(n){return 'P'+(n>=1&&n<=5?n:3);}
 function priColor(n){return{1:'var(--red)',2:'#E07B39',3:'var(--amber)',4:'#7DB87D',5:'var(--t3)'}[n]||'var(--amber)';}
 function priBg(n){return{1:'var(--rbg)',2:'#FFF2EC',3:'var(--abg)',4:'#F0FFF0',5:'var(--bg2)'}[n]||'var(--abg)';}
+
+function setPriority(id, val) {
+  const t = D.todos.find(function(x){return x.id===id;});
+  if (!t) return;
+  t.pri = String(val);
+  sv();
+  renderTSub();
+}
 function cyclePri(id){const t=D.todos.find(x=>x.id===id);if(!t)return;const n=parseInt(t.pri)||3;t.pri=String(n>=5?1:n+1);sv();renderTSub();}
 function moveToSomeday(id){const t=D.todos.find(x=>x.id===id);if(!t)return;D.someday.push({id:'sd-'+Date.now(),text:t.text});D.todos=D.todos.filter(x=>x.id!==id);sv();renderTSub();}
 function addSomeday(){const inp=document.getElementById('sd-inp');const text=inp.value.trim();if(!text)return;D.someday.push({id:'sd-'+Date.now(),text});sv();inp.value='';renderTSub();}
@@ -973,6 +981,45 @@ function getCarriedItems(w, d) {
     });
   });
   return carried;
+}
+
+let _todoListDragId = null;
+function onTodoListDO(event) {
+  event.preventDefault();
+  // Highlight drop target
+  const item = event.currentTarget;
+  document.querySelectorAll('.todo-item').forEach(function(el){el.style.borderTop='';el.style.borderBottom='';});
+  const rect = item.getBoundingClientRect();
+  const mid = rect.top + rect.height / 2;
+  if (event.clientY < mid) {
+    item.style.borderTop = '2px solid var(--green)';
+  } else {
+    item.style.borderBottom = '2px solid var(--green)';
+  }
+}
+function onTodoListDL(event) {
+  event.currentTarget.style.borderTop = '';
+  event.currentTarget.style.borderBottom = '';
+}
+function onTodoListDrop(event, targetId) {
+  event.preventDefault();
+  event.stopPropagation();
+  document.querySelectorAll('.todo-item').forEach(function(el){el.style.borderTop='';el.style.borderBottom='';});
+  const dragId = event.dataTransfer.getData('text/plain').replace('todo:','');
+  if (!dragId || dragId === targetId) return;
+  // Only reorder if both are todos (not dragging to planner)
+  const fromIdx = D.todos.findIndex(function(t){return t.id===dragId;});
+  const toIdx = D.todos.findIndex(function(t){return t.id===targetId;});
+  if (fromIdx === -1 || toIdx === -1) return;
+  // Determine insert position
+  const item = event.currentTarget;
+  const rect = item.getBoundingClientRect();
+  const insertBefore = event.clientY < (rect.top + rect.height / 2);
+  const moved = D.todos.splice(fromIdx, 1)[0];
+  const newToIdx = D.todos.findIndex(function(t){return t.id===targetId;});
+  D.todos.splice(insertBefore ? newToIdx : newToIdx + 1, 0, moved);
+  sv();
+  renderTSub();
 }
 function onTDStart(e,id){dragId=id;dragType='todo';e.dataTransfer.setData('text/plain','todo:'+id);e.dataTransfer.effectAllowed='copy';}
 function handleTacDragStart(e){const id=e.currentTarget.dataset.tid;if(id)onTacStart(e,id);}
