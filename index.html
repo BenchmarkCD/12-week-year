@@ -699,7 +699,7 @@ function renderTSub(){
           <div class="todo-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')">
             <span class="dh">⠿</span><div class="chk" onclick="completeTodo('${t.id}',this)"></div>
             <div style="flex:1;font-size:13px;min-width:0;word-break:break-word">${t.text}</div>
-            <span onclick="cyclePri('${t.id}')" class="pri-pill ${priLabel(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span>
+            <span onclick="cyclePri('${t.id}')" class="pri-pill ${priLabel(parseInt(t.pri||3))}" title="Click to change priority">${priLabel(parseInt(t.pri||3))} ↕</span>
             <span onclick="moveToSomeday('${t.id}')" title="Move to Someday" style="cursor:pointer;color:var(--t3);font-size:11px;padding:0 4px;flex-shrink:0">→</span>
             <span onclick="removeTodo('${t.id}')" style="cursor:pointer;color:var(--t3);font-size:16px;padding:0 4px;flex-shrink:0">×</span>
           </div>`).join(''):'<div class="empty">All caught up! ✓</div>'}
@@ -767,38 +767,35 @@ function renderWSub(){wSub==='tactics'?rWeekTacs():rPlannerInner();}
 function selW(n){setCW(n);rWeek();}
 
 function rWeekTacs(){
-  const p=AP();const w=getCW();const byGoal={};
-  tacsForWeek(p,w).forEach(t=>{if(!byGoal[t.gi])byGoal[t.gi]=[];byGoal[t.gi].push(t);});
-  const html=p.goals.map((g,gi)=>{
-    const tacs=byGoal[gi]||[];if(!tacs.length)return'';
-    const done=tacs.filter(t=>{if(t.rec==='weekly')return isChk(p,t.id,w,t.dow);if(t.rec==='daily'){for(let d=0;d<7;d++)if(!isChk(p,t.id,w,d))return false;return true;}return tacDoneInWeek(p,t.id,w);});
-    const pct=Math.round(done.length/tacs.length*100);
-    const isDoneGoal=(p.goalsDone||[]).includes(gi);
-    return`<div class="gs">
-      <div class="gh" onclick="togG2(${gi})">
-        <div class="gbadge ${isDoneGoal?'done-g':''}">${gi+1}</div>
-        <div class="gtitle ${isDoneGoal?'done-g':''}">${g}</div>
-        <div class="gpct">${done.length}/${tacs.length} · ${pct}%</div>
-        <div class="garr" id="arr2-${gi}">▶</div>
-      </div>
-      <div class="bar-bg" style="margin:0 1rem"><div class="bar-fill" style="width:${pct}%"></div></div>
-      <div class="gbody" id="gb2-${gi}">
-        <div style="padding-top:8px">${tacs.map(t=>{
-          const dk=t.rec==='weekly'?isChk(p,t.id,w,t.dow):(t.rec==='daily'?Array.from({length:7},(_,d)=>isChk(p,t.id,w,d)).every(Boolean):tacDoneInWeek(p,t.id,w));
-          const od=t.rec==='onetime'&&t.dueWeek&&t.dueWeek<w&&!dk;const ds=t.rec==='onetime'&&t.dueWeek===w&&!dk;
-          return`<div class="tr" draggable="true" ondragstart="onTacStart(event,'${t.id}')">
-            <span class="dh" style="cursor:grab">⠿</span>
-            <div class="chk ${dk?'on':''}" onclick="togTWeek(this,'${t.id}',${w})"></div>
-            <div class="tt ${dk?'done':''}" style="flex:1">${t.text}${t.time?`<span style="font-size:11px;color:var(--t3);margin-left:6px">${t.time}</span>`:''}${t.notes?`<div style="font-size:11px;color:var(--t3);margin-top:2px">📝 ${t.notes}</div>`:''}</div>
-            ${t.rec!=='onetime'?`<span class="rb">${t.rec}${t.rec==='weekly'?' · '+DAYS[t.dow||0].slice(0,3):''}</span>`:''}
-            ${t.dueWeek?`<span class="db ${od?'od':ds?'soon':''}">W${t.dueWeek}</span>`:''}
-          </div>`;}).join('')}</div>
-      </div>
-    </div>`;
-  }).join('')||`<div class="empty">No tactics yet — add them in Master Plan.</div>`;
-  document.getElementById('wsub').innerHTML=html;
+  const p=AP();const w=getCW();
+  const tacs=tacsForWeek(p,w);
+  if(!tacs.length){
+    document.getElementById('wsub').innerHTML='<div class="empty">No tactics yet — add them in Master Plan.</div>';
+    return;
+  }
+  let html='';
+  tacs.forEach(function(t){
+    const dk=t.rec==='weekly'?isChk(p,t.id,w,t.dow):(t.rec==='daily'?Array.from({length:7},(_,d)=>isChk(p,t.id,w,d)).every(Boolean):tacDoneInWeek(p,t.id,w));
+    const od=t.rec==='onetime'&&t.dueWeek&&t.dueWeek<w&&!dk;
+    const ds=t.rec==='onetime'&&t.dueWeek===w&&!dk;
+    const goalName=p.goals[t.gi]||'';
+    html+='<div class="tr" draggable="true" ondragstart="onTacStart(event,&quot;'+t.id+'&quot;)">'
+      +'<span class="dh" style="cursor:grab;font-size:12px">⠿</span>'
+      +'<div class="chk '+(dk?'on':'')+' twk-chk" data-tid="'+t.id+'" data-w="'+w+'"></div>'
+      +'<div class="tt '+(dk?'done':'')+'" style="flex:1">'
+        +t.text
+        +(t.time?'<span style="font-size:11px;color:var(--t3);margin-left:6px">'+t.time+'</span>':'')
+        +(t.notes?'<div style="font-size:11px;color:var(--t3);margin-top:2px">📝 '+t.notes+'</div>':'')
+        +'<div style="font-size:10px;color:var(--t3);margin-top:2px">Goal '+(t.gi+1)+': '+goalName.slice(0,50)+(goalName.length>50?'…':'')+'</div>'
+      +'</div>'
+      +(t.rec!=='onetime'?'<span class="rb">'+t.rec+(t.rec==='weekly'?' · '+DAYS[t.dow||0].slice(0,3):'')+'</span>':'')
+      +(t.dueWeek?'<span class="db '+(od?'od':ds?'soon':'')+'">W'+t.dueWeek+'</span>':'')
+    +'</div>';
+  });
+  document.getElementById('wsub').innerHTML='<div class="card" style="padding:.75rem 1rem">'+html+'</div>';
 }
-function togG2(gi){document.getElementById('gb2-'+gi)?.classList.toggle('open');document.getElementById('arr2-'+gi)?.classList.toggle('open');}
+function togG2(gi){
+document.getElementById('gb2-'+gi)?.classList.toggle('open');document.getElementById('arr2-'+gi)?.classList.toggle('open');}
 function togTWeek(el,tid,w){
   const p=AP();const cur=Array.from({length:7},(_,d)=>isChk(p,tid,w,d)).some(Boolean);const now=!cur;
   for(let d=0;d<7;d++)setChk(p,tid,w,d,now);
@@ -853,7 +850,7 @@ function rDayPlan(){
             <span style="font-weight:600;font-size:12px;flex:1;${b.t==='mit'?'color:#fff':''}">${b.title}</span>
             <span style="font-size:11px;opacity:.6">${ds}</span>
             ${b.rec?'<span style="font-size:10px;opacity:.5">🔁</span>':''}
-            <span onclick="rmBlock(${w},${d},${bi},event)" style="cursor:pointer;opacity:.45;font-size:15px;padding:0 2px">×</span>
+            <span onclick="editBlock(${w},${d},${bi},event)" style="cursor:pointer;opacity:.45;font-size:12px;padding:0 4px">✏️</span><span onclick="rmBlock(${w},${d},${bi},event)" style="cursor:pointer;opacity:.45;font-size:15px;padding:0 2px">×</span>
           </div>
           ${stodos}
           <div style="font-size:10px;opacity:.3;margin-top:1px">↙ Drop to-dos or tactics here</div>
@@ -883,7 +880,10 @@ function rDayPlan(){
     }
   }
 
-    document.getElementById('dpc').innerHTML=`
+    // Save scroll position before re-render
+  const tscrollEl = document.querySelector('.tscroll');
+  const savedScroll = tscrollEl ? tscrollEl.scrollTop : 0;
+  document.getElementById('dpc').innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div style="font-size:15px;font-weight:700">${DAYS[d]}, ${fd(ddate(w,d))}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -898,9 +898,25 @@ function rDayPlan(){
         <div class="tscroll">${grid}</div>
       </div>
       <div>
-        <p class="lbl">Today\'s tactics — drag onto blocks →</p>
+        <p class="lbl">This Week's Tactics — drag onto blocks →</p>
         <div class="card" style="padding:.75rem 1rem;max-height:200px;overflow-y:auto">
-          ${dayTacs.length?dayTacs.map(t=>{const done=isChk(p,t.id,w,d);return`<div class="drag-item" draggable="true" ondragstart="onTacStart(event,'${t.id}')"><span class="dh">⠿</span><div class="chk ${done?'on':''}" onclick="togTDay(this,'${t.id}',${w},${d})"></div><div style="flex:1;min-width:0;word-break:break-word;${done?'text-decoration:line-through;opacity:.5':''}">${t.text}</div>${t.rec!=='onetime'?`<span class="rb">${t.rec}</span>`:''}${t.dueWeek?`<span class="db">W${t.dueWeek}</span>`:''}</div>`;}).join(''):'<div style="font-size:12px;color:var(--t3);padding:.5rem 0">No tactics today — check Master Plan.</div>'}
+          ${(function(){
+  // Get tactic IDs already in a block today
+  const inBlocks=new Set();
+  getDayBlocks(w,d).forEach(function(b){(b.sts||[]).forEach(function(s){if(s.startsWith('tac:'))inBlocks.add(s.slice(4));});});
+  // Filter: show tactics not yet in a block (or already done)
+  const available=dayTacs.filter(function(t){return !inBlocks.has(t.id);});
+  if(!available.length)return '<div style="font-size:12px;color:var(--t3);padding:.5rem 0">All tactics scheduled ✓</div>';
+  return available.map(function(t){
+    const done=isChk(p,t.id,w,d);
+    return '<div class="drag-item" draggable="true" ondragstart="onTacStart(event,\''+t.id+'\')"><span class="dh">⠿</span>'
+      +'<div class="chk '+(done?'on':'')+'" onclick="togTDay(this,\''+t.id+'\','+w+','+d+')"></div>'
+      +'<div style="flex:1;min-width:0;word-break:break-word;'+(done?'text-decoration:line-through;opacity:.5':'')+'">'+t.text+'</div>'
+      +(t.rec!=='onetime'?'<span class="rb">'+t.rec+'</span>':'')
+      +(t.dueWeek?'<span class="db">W'+t.dueWeek+'</span>':'')
+    +'</div>';
+  }).join('');
+})()}
         </div>
         <p class="lbl" style="margin-top:1rem">To-Dos — drag onto blocks →<span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)"> stays on list until checked off</span></p>
         <div class="card" style="padding:.75rem 1rem;max-height:220px;overflow-y:auto">
@@ -925,10 +941,40 @@ function rDayPlan(){
         })()}
       </div>
     </div>`;
+  // Restore scroll position
+  setTimeout(function(){
+    const ts = document.querySelector('.tscroll');
+    if(ts && savedScroll > 0) ts.scrollTop = savedScroll;
+  }, 0);
 }
 
 // ── DRAG & DROP ──────────────────────────────────────────────
+
+// Check previous day for incomplete tactics/todos and surface them
+function getCarriedItems(w, d) {
+  const p = AP();
+  const carried = {tactics: [], todos: []};
+  // Previous day
+  let pw = w, pd = d - 1;
+  if (pd < 0) { pd = 6; pw = w - 1; }
+  if (pw < 1) return carried;
+  const prevBlocks = getDayBlocks(pw, pd);
+  prevBlocks.forEach(function(b) {
+    (b.sts || []).forEach(function(raw) {
+      if (raw.startsWith('tac:')) {
+        const tid = raw.slice(4);
+        const tac = p.tactics.find(function(t) { return t.id === tid; });
+        if (tac && !isChk(p, tid, pw, pd)) carried.tactics.push(tac);
+      } else {
+        const td = D.todos.find(function(t) { return t.id === raw; });
+        if (td && !td.done) carried.todos.push(td);
+      }
+    });
+  });
+  return carried;
+}
 function onTDStart(e,id){dragId=id;dragType='todo';e.dataTransfer.setData('text/plain','todo:'+id);e.dataTransfer.effectAllowed='copy';}
+function handleTacDragStart(e){const id=e.currentTarget.dataset.tid;if(id)onTacStart(e,id);}
 function onTacStart(e,id){dragId=id;dragType='tactic';e.dataTransfer.setData('text/plain','tac:'+id);e.dataTransfer.effectAllowed='copy';}
 function onDO(e,si){e.preventDefault();e.dataTransfer.dropEffect='copy';document.querySelectorAll('.trow').forEach(r=>r.classList.remove('dov'));document.getElementById('sr-'+si)?.classList.add('dov');}
 function onDL(e){e.currentTarget.classList.remove('dov');}
@@ -1018,6 +1064,59 @@ function confirmB(){
       if(newBlock)pushBlockToCalendar(newBlock,tw,td);
     });
   }
+}
+
+function editBlock(w, d, bi, event) {
+  event.stopPropagation();
+  const blocks = getDayBlocks(w, d);
+  const b = blocks[bi];
+  if (!b) return;
+  const wc = periodWeekCount(AP());
+  document.getElementById('modal-ct').innerHTML =
+    '<div class="modal-overlay" onclick="closeModal(event)">'
+      + '<div class="modal" onclick="event.stopPropagation()">'
+        + '<div class="mt">Edit block</div>'
+        + '<label class="flbl">Title</label>'
+        + '<input class="minp" type="text" id="eb-title" value="' + b.title + '">'
+        + '<label class="flbl">Type</label>'
+        + '<select class="minp" id="eb-type" style="margin-top:0">'
+          + Object.entries(BTYPES).map(function(e){return '<option value="'+e[0]+'" '+(b.t===e[0]?'selected':'')+'>'+e[1].label+'</option>';}).join('')
+        + '</select>'
+        + '<label class="flbl">Start time</label>'
+        + '<select class="minp" id="eb-start" style="margin-top:0">'
+          + SLOTS.map(function(s,idx){return '<option value="'+idx+'" '+(idx===b.s?'selected':'')+'>'+s.label+'</option>';}).join('')
+        + '</select>'
+        + '<label class="flbl">End time</label>'
+        + '<select class="minp" id="eb-end" style="margin-top:0">'
+          + SLOTS.map(function(s,idx){return '<option value="'+idx+'" '+(idx===b.e?'selected':'')+'>'+s.label+'</option>';}).join('')
+        + '</select>'
+        + '<div class="mfooter">'
+          + '<button onclick="closeModal()">Cancel</button>'
+          + '<button class="primary" onclick="saveEditBlock(' + w + ',' + d + ',' + bi + ')">Save</button>'
+        + '</div>'
+      + '</div>'
+    + '</div>';
+}
+function saveEditBlock(w, d, bi) {
+  const blocks = getDayBlocks(w, d);
+  const b = blocks[bi];
+  if (!b) return;
+  const title = document.getElementById('eb-title').value.trim() || b.title;
+  const type = document.getElementById('eb-type').value;
+  const start = parseInt(document.getElementById('eb-start').value);
+  const end = parseInt(document.getElementById('eb-end').value);
+  if (end <= start) { toast('End time must be after start time.'); return; }
+  // Check for overlap with other blocks
+  const others = blocks.filter(function(_,i){return i!==bi;});
+  if (others.some(function(ob){return start < ob.e && end > ob.s;})) {
+    toast('Overlaps another block — adjust times.');
+    return;
+  }
+  b.title = title; b.t = type; b.s = start; b.e = end;
+  setDayBlocks(w, d, blocks);
+  closeModal();
+  rDayPlan();
+  toast('Block updated ✓');
 }
 function rmBlock(w,d,bi,event){
   event.stopPropagation();const blocks=getDayBlocks(w,d);const b=blocks[bi];
@@ -1278,16 +1377,16 @@ function showInlineAdd(gi){
       <input class="minp" type="text" id="it-t-${gi}" placeholder="Describe this tactic…" onkeydown="if(event.key==='Enter')saveInlineTac(${gi})">
       <div class="mrow">
         <div style="flex:1"><label class="flbl">Type</label><select id="it-r-${gi}" onchange="updIT(${gi})" style="width:100%;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff"><option value="onetime">One-time</option><option value="weekly">Weekly</option><option value="daily">Daily</option><option value="ongoing">Ongoing</option></select></div>
-        <div style="flex:1" id="it-x-${gi}"><label class="flbl">Due week</label><select id="it-dw-${gi}" style="width:100%;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff">${Array.from({length:wc},(_,i)=>`<option value="${i}" ${i===getCW()?'selected':''}>${periodWeekLabel(p,i)}</option>`).join('')}</select></div>
+        <div style="flex:1" id="it-x-${gi}"><label class="flbl">Due week</label><select id="it-dw-${gi}" style="width:100%;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff">${Array.from({length:14},(_,i)=>i===0&&!p.hasPlanWeek?'': `<option value="${i}" ${i===getCW()?'selected':''}>${periodWeekLabel(p,i)}</option>`).join('')}</select></div>
       </div>
       <input class="minp" id="it-n-${gi}" placeholder="Notes / context (optional)" style="font-size:12px">
-      <div style="display:flex;gap:8px;margin-top:4px"><button class="btn green" onclick="saveInlineTac(${gi})">Save &amp; add another</button><button class="btn" onclick="doneIA(${gi})">Done</button></div>
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><button class="btn green" onclick="saveInlineTacDone(${gi})">Save &amp; Done</button><button class="btn" onclick="saveInlineTac(${gi})">Save &amp; Add Another</button><button class="btn" onclick="doneIA(${gi})">Cancel</button></div>
     </div>`;
   setTimeout(()=>document.getElementById('it-t-'+gi)?.focus(),50);
 }
 function updIT(gi){
   const rec=document.getElementById('it-r-'+gi).value;const p=AP();const wc=periodWeekCount(p);const cont=document.getElementById('it-x-'+gi);
-  if(rec==='onetime')cont.innerHTML=`<label class="flbl">Due week</label><select id="it-dw-${gi}" style="width:100%;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff">${Array.from({length:wc},(_,i)=>`<option value="${i}" ${i===getCW()?'selected':''}>${periodWeekLabel(p,i)}</option>`).join('')}</select>`;
+  if(rec==='onetime')cont.innerHTML=`<label class="flbl">Due week</label><select id="it-dw-${gi}" style="width:100%;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff">${Array.from({length:14},(_,i)=>i===0&&!p.hasPlanWeek?'': `<option value="${i}" ${i===getCW()?'selected':''}>${periodWeekLabel(p,i)}</option>`).join('')}</select>`;
   else if(rec==='weekly')cont.innerHTML=`<label class="flbl">Day + time</label><div style="display:flex;gap:4px"><select id="it-dow-${gi}" style="flex:1;padding:7px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff">${DAYS.map((d,i)=>`<option value="${i}">${d}</option>`).join('')}</select><input type="time" id="it-tm-${gi}" style="flex:1;padding:7px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff"></div>`;
   else if(rec==='daily')cont.innerHTML=`<label class="flbl">Time (optional)</label><input type="time" id="it-tm-${gi}" style="width:100%;padding:7px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff">`;
   else cont.innerHTML='';
@@ -1309,6 +1408,10 @@ function saveInlineTac(gi){
   const inp=document.getElementById('it-t-'+gi);if(inp){inp.value='';inp.focus();}
   const noteInp=document.getElementById('it-n-'+gi);if(noteInp)noteInp.value='';
   toast('Tactic added ✓');
+}
+function saveInlineTacDone(gi){
+  saveInlineTac(gi);
+  setTimeout(function(){doneIA(gi);},100);
 }
 function doneIA(gi){document.getElementById('mpil-'+gi).innerHTML=`<button class="btn green" style="margin-top:8px;font-size:12px" onclick="showInlineAdd(${gi})">+ Add tactic for goal ${gi+1}</button>`;}
 function openAddTac(gi){mpOpen=gi!==null?gi:0;rMasterPlan();if(gi!==null)showInlineAdd(gi);}
