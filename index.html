@@ -57,7 +57,7 @@ body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:#f
 .tcell.buffer{background:var(--abg);color:#7A4F00;border-left:3px solid var(--amber)}
 .tcell.breakout{background:var(--gbg);color:#155C35;border-left:3px solid var(--green)}
 .tcell.general{background:var(--bg2);color:inherit;border-left:3px solid rgba(0,0,0,.2)}
-.tcell.mit{background:linear-gradient(135deg,#2D1B69 0%,#4A2C8A 100%);color:#E8D5FF;border-left:4px solid #9B59B6}
+.tcell.mit{background:linear-gradient(135deg,#2D1B69 0%,#4A2C8A 100%);color:#fff;border-left:4px solid #9B59B6}
 .btag{font-size:10px;font-weight:600;padding:1px 7px;border-radius:20px;flex-shrink:0}
 .strategic .btag{background:var(--blue);color:#fff}.buffer .btag{background:var(--amber);color:#fff}
 .breakout .btag{background:var(--green);color:#fff}.general .btag{background:rgba(0,0,0,.15);color:inherit}
@@ -123,9 +123,11 @@ body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:#f
 .empty{padding:1rem;text-align:center;color:var(--t3);font-size:12px}
 .period-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--bg2);border:1px solid var(--bdr);color:var(--t2);margin-left:8px}
 .pri-pill{font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid;flex-shrink:0;cursor:pointer;white-space:nowrap}
-.pri-pill.high{border-color:var(--red);color:var(--red);background:var(--rbg)}
-.pri-pill.med{border-color:var(--amber);color:#7A4F00;background:var(--abg)}
-.pri-pill.low{border-color:var(--bdr);color:var(--t3);background:var(--bg2)}
+.pri-pill.p1{border-color:var(--red);color:var(--red);background:var(--rbg);font-weight:700}
+.pri-pill.p2{border-color:#E07B39;color:#C05A1F;background:#FFF2EC}
+.pri-pill.p3{border-color:var(--amber);color:#7A4F00;background:var(--abg)}
+.pri-pill.p4{border-color:#7DB87D;color:#2D6B2D;background:#F0FFF0}
+.pri-pill.p5{border-color:var(--bdr);color:var(--t3);background:var(--bg2)}
 
 .streak-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#FF6B35,#F0A500);color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
 .one-thing-box{background:linear-gradient(135deg,var(--gbg),#E8F8F2);border:2px solid var(--green);border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:1.25rem}
@@ -224,7 +226,7 @@ body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:#f
 <div class="qc" style="margin-top:.5rem">
   <span style="font-size:16px">⚡</span>
   <input type="text" id="qc-inp" placeholder="Quick capture — type anything, hit Enter to save to To-Dos…" onkeydown="if(event.key==='Enter')quickCapture()">
-  <select id="qc-pri" style="padding:4px 8px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+  <select id="qc-pri" style="padding:4px 8px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff"><option value="1">P1 — Most important</option><option value="2">P2</option><option value="3" selected>P3</option><option value="4">P4</option><option value="5">P5 — Least important</option></select>
   <button class="btn" onclick="quickCapture()">Capture</button>
 </div>
 
@@ -374,7 +376,7 @@ function goalScore(p,gi){
 function getDayBlocks(w,d){const p=AP();return(p.blocks[w]&&p.blocks[w][d])||[];}
 function setDayBlocks(w,d,arr){const p=AP();if(!p.blocks[w])p.blocks[w]={};p.blocks[w][d]=arr;sv();}
 function activeTodos(){return D.todos.filter(t=>!t.done);}
-function sortTodos(arr){return[...arr.filter(t=>t.pri==='high'),...arr.filter(t=>t.pri==='med'),...arr.filter(t=>t.pri==='low')];}
+function sortTodos(arr){return arr.slice().sort(function(a,b){return(parseInt(a.pri)||3)-(parseInt(b.pri)||3);});}
 function randEnc(){return ENC[Math.floor(Math.random()*ENC.length)];}
 function toast(msg){const el=document.getElementById('toast-el');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600);}
 function celebrate(msg){
@@ -508,7 +510,7 @@ function rToday(){
   const blocks=getDayBlocks(w,d);
   const dayTacs=tacsForDay(p,w,d);
   const pending=activeTodos();
-  const high=pending.filter(function(t){return t.pri==='high';});
+  const high=pending.filter(function(t){return parseInt(t.pri||3)<=2;});
   const topTodos=sortTodos(high.length?high:pending).slice(0,5);
   const wlabel=periodWeekLabel(p,w);
   const intention=p.intentions[w]||'';
@@ -616,7 +618,7 @@ function rToday(){
           +'<button class="btn" style="float:right;font-size:11px;padding:2px 8px;margin-top:-2px" id="log-win-btn" onclick="logWin()">🏆 Log a win</button>'
         +'</p>'
         +'<div class="card" style="padding:.75rem 1rem">'
-          +(topTodos.length?topTodos.map(function(t){return'<div class="tr"><div class="chk ctd-chk" data-id="'+t.id+'" onclick="handleCTD(this)"></div><div class="tt" style="flex:1">'+t.text+'</div><span class="pri-pill '+t.pri+'">'+t.pri+'</span></div>';}).join(''):'<div class="empty">Nothing pending ✓</div>')
+          +(topTodos.length?topTodos.map(function(t){return'<div class="tr"><div class="chk ctd-chk" data-id="'+t.id+'" onclick="handleCTD(this)"></div><div class="tt" style="flex:1">'+t.text+'</div><span class="pri-pill '+priLabel(parseInt(t.pri||3))+'">'+priLabel(parseInt(t.pri||3))+'</span></div>';}).join(''):'<div class="empty">Nothing pending ✓</div>')
           +(pending.length>5?'<div style="font-size:12px;color:var(--t3);padding-top:8px">+'+(pending.length-5)+' more in To-Dos</div>':'')
         +'</div>'
 
@@ -681,13 +683,13 @@ function renderTSub(){
   if(tSub==='active'){
     document.getElementById('tsub').innerHTML=`
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem">
-        <div style="background:var(--rbg);border:1px solid var(--red);border-radius:var(--rs);padding:.75rem;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--red)">${pending.filter(t=>t.pri==='high').length}</div><div style="font-size:11px;color:var(--red)">High</div></div>
-        <div style="background:var(--abg);border:1px solid var(--amber);border-radius:var(--rs);padding:.75rem;text-align:center"><div style="font-size:20px;font-weight:700;color:#8A5700">${pending.filter(t=>t.pri==='med').length}</div><div style="font-size:11px;color:#8A5700">Med</div></div>
-        <div style="background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rs);padding:.75rem;text-align:center"><div style="font-size:20px;font-weight:700">${pending.filter(t=>t.pri==='low').length}</div><div style="font-size:11px;color:var(--t3)">Low</div></div>
+        <div style="background:var(--rbg);border:1px solid var(--red);border-radius:var(--rs);padding:.75rem;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--red)">${pending.filter(t=>parseInt(t.pri||3)<=2).length}</div><div style="font-size:11px;color:var(--red)">High</div></div>
+        <div style="background:var(--abg);border:1px solid var(--amber);border-radius:var(--rs);padding:.75rem;text-align:center"><div style="font-size:20px;font-weight:700;color:#8A5700">${pending.filter(t=>(parseInt(t.pri||3)===3)).length}</div><div style="font-size:11px;color:#8A5700">Med</div></div>
+        <div style="background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rs);padding:.75rem;text-align:center"><div style="font-size:20px;font-weight:700">${pending.filter(t=>parseInt(t.pri||3)>=4).length}</div><div style="font-size:11px;color:var(--t3)">Low</div></div>
       </div>
       <div class="add-row" style="margin-bottom:1rem">
         <input type="text" id="td-inp" placeholder="Add a new to-do…" onkeydown="if(event.key==='Enter')addTodo()" style="font-size:13px;padding:8px 12px">
-        <select id="td-pri" style="padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+        <select id="td-pri" style="padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff"><option value="1">P1 — Most important</option><option value="2">P2</option><option value="3" selected>P3</option><option value="4">P4</option><option value="5">P5 — Least important</option></select>
         <button onclick="addTodo()" style="padding:8px 14px;font-size:13px">+ Add</button>
       </div>
       <p class="lbl">Pending <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">· tap priority to cycle · drag into Daily Planner time blocks</span></p>
@@ -696,7 +698,7 @@ function renderTSub(){
           <div class="todo-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')">
             <span class="dh">⠿</span><div class="chk" onclick="completeTodo('${t.id}',this)"></div>
             <div style="flex:1;font-size:13px;min-width:0;word-break:break-word">${t.text}</div>
-            <span onclick="cyclePri('${t.id}')" class="pri-pill ${t.pri}">${t.pri}</span>
+            <span onclick="cyclePri('${t.id}')" class="pri-pill ${priLabel(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span>
             <span onclick="moveToSomeday('${t.id}')" title="Move to Someday" style="cursor:pointer;color:var(--t3);font-size:11px;padding:0 4px;flex-shrink:0">→</span>
             <span onclick="removeTodo('${t.id}')" style="cursor:pointer;color:var(--t3);font-size:16px;padding:0 4px;flex-shrink:0">×</span>
           </div>`).join(''):'<div class="empty">All caught up! ✓</div>'}
@@ -719,11 +721,15 @@ function addTodo(){const inp=document.getElementById('td-inp');const pri=documen
 function completeTodo(id,el){const t=D.todos.find(x=>x.id===id);if(!t)return;if(t.sr)t.sr.forEach(ref=>{const blks=getDayBlocks(ref.w,ref.d);blks.forEach(b=>{if(b.sts)b.sts=b.sts.filter(s=>s!==id);});setDayBlocks(ref.w,ref.d,blks);});t.done=true;t.sr=[];sv();el.classList.add('on');celebrate('✓ Done! '+randEnc());setTimeout(()=>renderTSub(),500);}
 function removeTodo(id){const t=D.todos.find(x=>x.id===id);if(t&&t.sr)t.sr.forEach(ref=>{const blks=getDayBlocks(ref.w,ref.d);blks.forEach(b=>{if(b.sts)b.sts=b.sts.filter(s=>s!==id);});setDayBlocks(ref.w,ref.d,blks);});D.todos=D.todos.filter(x=>x.id!==id);sv();renderTSub();}
 function restoreTodo(id){const t=D.todos.find(x=>x.id===id);if(t){t.done=false;sv();renderTSub();}}
-function cyclePri(id){const t=D.todos.find(x=>x.id===id);if(!t)return;t.pri=t.pri==='high'?'med':t.pri==='med'?'low':'high';sv();renderTSub();}
+function priClass(n){return 'p'+(n>=1&&n<=5?n:3);}
+function priLabel(n){return 'P'+(n>=1&&n<=5?n:3);}
+function priColor(n){return{1:'var(--red)',2:'#E07B39',3:'var(--amber)',4:'#7DB87D',5:'var(--t3)'}[n]||'var(--amber)';}
+function priBg(n){return{1:'var(--rbg)',2:'#FFF2EC',3:'var(--abg)',4:'#F0FFF0',5:'var(--bg2)'}[n]||'var(--abg)';}
+function cyclePri(id){const t=D.todos.find(x=>x.id===id);if(!t)return;const n=parseInt(t.pri)||3;t.pri=String(n>=5?1:n+1);sv();renderTSub();}
 function moveToSomeday(id){const t=D.todos.find(x=>x.id===id);if(!t)return;D.someday.push({id:'sd-'+Date.now(),text:t.text});D.todos=D.todos.filter(x=>x.id!==id);sv();renderTSub();}
 function addSomeday(){const inp=document.getElementById('sd-inp');const text=inp.value.trim();if(!text)return;D.someday.push({id:'sd-'+Date.now(),text});sv();inp.value='';renderTSub();}
 function removeSD(id){D.someday=D.someday.filter(x=>x.id!==id);sv();renderTSub();}
-function promoteSD(id){const t=D.someday.find(x=>x.id===id);if(!t)return;D.todos.push({id:'td-'+Date.now(),text:t.text,pri:'med',done:false,sr:[]});D.someday=D.someday.filter(x=>x.id!==id);sv();renderTSub();}
+function promoteSD(id){const t=D.someday.find(x=>x.id===id);if(!t)return;D.todos.push({id:'td-'+Date.now(),text:t.text,pri:'3',done:false,sr:[]});D.someday=D.someday.filter(x=>x.id!==id);sv();renderTSub();}
 
 // ── THIS WEEK ────────────────────────────────────────────────
 let wSub='tactics';
@@ -897,7 +903,7 @@ function rDayPlan(){
         </div>
         <p class="lbl" style="margin-top:1rem">To-Dos — drag onto blocks →<span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)"> stays on list until checked off</span></p>
         <div class="card" style="padding:.75rem 1rem;max-height:220px;overflow-y:auto">
-          ${activeTodos().length?sortTodos(activeTodos()).map(t=>`<div class="drag-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')"><span class="dh">⠿</span><div style="flex:1;min-width:0;word-break:break-word">${t.text}</div><span class="pri-pill ${t.pri}">${t.pri}</span></div>`).join(''):'<div class="empty">No pending to-dos.</div>'}
+          ${activeTodos().length?sortTodos(activeTodos()).map(t=>`<div class="drag-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')"><span class="dh">⠿</span><div style="flex:1;min-width:0;word-break:break-word">${t.text}</div><span class="pri-pill ${priLabel(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span></div>`).join(''):'<div class="empty">No pending to-dos.</div>'}
         </div>
       </div>
     </div>`;
@@ -984,6 +990,16 @@ function confirmB(){
   let added=0;
   targets.forEach(([tw,td])=>{const blks=getDayBlocks(tw,td);if(blks.some(b=>si<b.e&&es>b.s))return;blks.push({...bObj,sts:[]});blks.sort((a,b)=>a.s-b.s);setDayBlocks(tw,td,blks);added++;});
   closeModal();rDayPlan();toast(added>1?`Block added to ${added} days ✓`:'Block added ✓');
+  // Push to Google Calendar if signed in
+  if(gToken&&gapiReady){
+    const _title=title,_type=pB.t,_s=pB.s;
+    targets.forEach(function(pair){
+      const tw=pair[0],td=pair[1];
+      const blks=getDayBlocks(tw,td);
+      const newBlock=blks.find(function(b){return b.s===_s&&b.t===_type&&b.title===_title;});
+      if(newBlock)pushBlockToCalendar(newBlock,tw,td);
+    });
+  }
 }
 function rmBlock(w,d,bi,event){
   event.stopPropagation();const blocks=getDayBlocks(w,d);const b=blocks[bi];
@@ -1508,7 +1524,7 @@ function confirmBrainDumpSort(){
   lines.forEach(function(line,i){
     const cb=document.getElementById('bd-'+i);
     if(cb&&cb.checked){
-      D.todos.push({id:'td-'+Date.now()+'-'+i,text:line,pri:'med',done:false,sr:[]});
+      D.todos.push({id:'td-'+Date.now()+'-'+i,text:line,pri:'3',done:false,sr:[]});
       added++;
     }
   });
@@ -1843,12 +1859,15 @@ async function loadCalendars() {
     syncCalendarsIn();
   } catch(e) {
     console.warn('Calendar load error:', e);
+    setSyncStatus('error', '⚠ Cal error: '+e.message);
   }
 }
 
 // Pull Google Calendar events into the planner
 async function syncCalendarsIn() {
-  if (!gToken || !gapiReady || !gCalendars.length) return;
+  if (!gToken) { console.log('syncCalendarsIn: no token'); return; }
+  if (!gapiReady) { console.log('syncCalendarsIn: gapi not ready, retrying...'); setTimeout(syncCalendarsIn, 2000); return; }
+  if (!gCalendars.length) { console.log('syncCalendarsIn: no calendars yet, loading...'); await loadCalendars(); return; }
   const p = AP();
   const wc = 14;
   let imported = 0;
