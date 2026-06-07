@@ -509,6 +509,7 @@ function rToday(){
   if(D.curDay[p.id]===undefined||D.curDay[p.id]===null){setCD(realD);}
   const w=getCW();const d=getCD();
   const blocks=getDayBlocks(w,d);
+  console.log('rToday: w='+w+' d='+d+' blocks='+blocks.length+' allBlocks='+JSON.stringify(Object.keys(AP().blocks||{})));
   const dayTacs=tacsForDay(p,w,d);
   const pending=activeTodos();
   const high=pending.filter(function(t){return parseInt(t.pri||3)<=2;});
