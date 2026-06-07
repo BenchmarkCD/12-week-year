@@ -856,6 +856,7 @@ function rDayPlan(){
       const startMins=start.getHours()*60+start.getMinutes();
       const endMins=end.getHours()*60+end.getMinutes();
       const startSlot=Math.floor(startMins/15);const endSlot=Math.ceil(endMins/15);
+      if(startSlot<0||startSlot>=SLOTS.length)return; // bounds check
       // Check no overlap with existing blocks
       let hasOverlap=false;for(let s=startSlot;s<endSlot;s++)if(occ[s]!==undefined)hasOverlap=true;
       if(hasOverlap)return;
@@ -906,14 +907,13 @@ function rDayPlan(){
         <p class="lbl" style="margin-top:1rem">To-Dos — drag onto blocks →<span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)"> stays on list until checked off</span></p>
         <div class="card" style="padding:.75rem 1rem;max-height:220px;overflow-y:auto">
           ${activeTodos().length?sortTodos(activeTodos()).map(t=>`<div class="drag-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')"><span class="dh">⠿</span><div style="flex:1;min-width:0;word-break:break-word">${t.text}</div><span class="pri-pill ${priLabel(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span></div>`).join(''):'<div class="empty">No pending to-dos.</div>'}
-        </div>
-        +(function(){
+        ${(function(){
           const evs=D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]?D.calEvents[w][d]:[];
           if(!evs.length)return '';
-          const sorted=evs.slice().sort(function(a,b){return new Date(a.start)-new Date(b.start);});
+          const sorted=evs.slice().sort((a,b)=>new Date(a.start)-new Date(b.start));
           return '<p class="lbl" style="margin-top:1rem">📅 Calendar events</p>'
             +'<div class="card" style="padding:.75rem 1rem;max-height:200px;overflow-y:auto">'
-            +sorted.map(function(ev){
+            +sorted.map(ev=>{
               const ts=ev.allDay?'All day':new Date(ev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
               const te=ev.end&&!ev.allDay?' – '+new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
               return '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr)">'
@@ -923,7 +923,8 @@ function rDayPlan(){
               +'</div>';
             }).join('')
             +'</div>';
-        }())
+        })()}
+        </div>
       </div>
     </div>`;
 }
