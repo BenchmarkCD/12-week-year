@@ -543,6 +543,19 @@ function rToday(){
   } else {
     tlHtml='<div style="color:var(--t3);font-size:12px;padding:.5rem 0">No blocks planned — go to This Week → Daily Planner.</div>';
   }
+  // Overlay Google Calendar events on Today schedule
+  if(D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]){
+    D.calEvents[w][d].forEach(function(ev){
+      const timeStr=ev.allDay?'All day':new Date(ev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      const endStr=ev.end&&!ev.allDay?' – '+new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+      tlHtml+='<div style="border-radius:8px;padding:6px 10px;margin-bottom:3px;background:#fff;border-left:4px solid '+ev.color+';border:1px solid var(--bdr);display:flex;align-items:center;gap:8px">'
+        +'<span style="width:10px;height:10px;border-radius:50%;background:'+ev.color+';flex-shrink:0"></span>'
+        +'<span style="font-size:13px;font-weight:500;flex:1">'+ev.title+'</span>'
+        +'<span style="font-size:11px;color:var(--t3)">'+timeStr+endStr+'</span>'
+      +'</div>';
+    });
+  }
+  if(!tlHtml)tlHtml='<div style="color:var(--t3);font-size:12px;padding:.5rem 0">No blocks or events today — go to This Week → Daily Planner.</div>';
 
   document.getElementById('page-today').innerHTML=
     advNudge
@@ -827,6 +840,42 @@ function rDayPlan(){
     }
   }
 
+  // Add Google Calendar events as visual slots in the grid
+  if(D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]){
+    D.calEvents[w][d].forEach(function(ev){
+      if(ev.allDay)return; // all-day shown in right column
+      const start=new Date(ev.start);const end=ev.end?new Date(ev.end):new Date(start.getTime()+30*60000);
+      const startMins=start.getHours()*60+start.getMinutes();
+      const endMins=end.getHours()*60+end.getMinutes();
+      const startSlot=Math.floor(startMins/15);const endSlot=Math.ceil(endMins/15);
+      // Check no overlap with existing blocks
+      let hasOverlap=false;for(let s=startSlot;s<endSlot;s++)if(occ[s]!==undefined)hasOverlap=true;
+      if(hasOverlap)return;
+      // Inject into grid at correct position
+      const slotLabel=SLOTS[startSlot]?SLOTS[startSlot].label:'';
+      const dur=endMins-startMins;const dh=Math.floor(dur/60),dm=dur%60;
+      const ds=dh>0?(dm?dh+'h '+dm+'m':dh+'h'):dm+'m';
+      const rowHtml='<div class="trow '+(SLOTS[startSlot]&&SLOTS[startSlot].isHour?'hour':'')+'" style="min-height:'+Math.max(28,(endSlot-startSlot)*24)+'px">'
+        +'<div class="tlbl '+(SLOTS[startSlot]&&SLOTS[startSlot].isHour?'oh':'')+'">'+slotLabel+'</div>'
+        +'<div style="flex:1;padding:5px 8px;background:'+ev.color+'22;border-left:3px solid '+ev.color+';display:flex;align-items:flex-start;flex-direction:column;gap:2px">'
+          +'<div style="display:flex;align-items:center;gap:6px;width:100%">'
+            +'<span style="width:8px;height:8px;border-radius:50%;background:'+ev.color+';flex-shrink:0"></span>'
+            +'<span style="font-size:12px;font-weight:500;flex:1;color:inherit">'+ev.title+'</span>'
+            +'<span style="font-size:11px;opacity:.6">'+ds+'</span>'
+          +'</div>'
+        +'</div>'
+      +'</div>';
+      // Insert at correct position in grid string
+      const marker='id="sr-'+startSlot+'"';
+      if(grid.includes(marker)){
+        // Replace the empty slot row with the cal event
+        const rowStart=grid.lastIndexOf('<div class="trow',grid.indexOf(marker));
+        const rowEnd=grid.indexOf('</div>',grid.indexOf(marker))+6;
+        grid=grid.slice(0,rowStart)+rowHtml+grid.slice(rowEnd);
+        for(let s=startSlot;s<endSlot;s++)occ[s]=-1; // mark as occupied
+      }
+    });
+  }
   document.getElementById('dpc').innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div style="font-size:15px;font-weight:700">${DAYS[d]}, ${fd(ddate(w,d))}</div>
