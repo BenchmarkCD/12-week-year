@@ -747,15 +747,22 @@ function rWeek(){
     <div class="ws">${Array.from({length:wc},(_,i)=>{const lbl=p.hasPlanWeek?(i===0?'P':i===13?'R':i):(i===13?'R':i);const cls=i===getCW()?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===13?'w13':'';return`<button class="wb ${cls}" onclick="selW(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
     <div style="margin-bottom:.75rem"><button class="btn green" style="width:100%;padding:9px;font-size:13px" onclick="openWeeklyWizard()">📋 Plan My Week</button></div>
     <div style="margin-bottom:1rem"><input type="text" value="${intention}" placeholder="This week I'm focused on… (weekly intention)" onchange="saveIntent(${w},this.value)" style="width:100%;padding:8px 12px;font-size:13px;border-radius:var(--rs);border:1px solid var(--bdr);background:#fff;color:inherit"></div>
-    <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">
-      <button class="btn ${wSub==='tactics'?'asub':''}" onclick="setWSub('tactics')">Tactics</button>
-      <button class="btn ${wSub==='planner'?'asub':''}" onclick="setWSub('planner')">Daily Planner</button>
+    <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap" id="wsub-tabs">
+      <button class="btn ${wSub==='tactics'?'asub':''}" id="btn-tactics" onclick="setWSub('tactics')">Tactics</button>
+      <button class="btn ${wSub==='planner'?'asub':''}" id="btn-planner" onclick="setWSub('planner')">Daily Planner</button>
     </div>
     <div id="wsub"></div>`;
   renderWSub();
 }
 function saveIntent(w,v){const p=AP();p.intentions[w]=v;sv();}
-function setWSub(s){wSub=s;renderWSub();}
+function setWSub(s){
+  wSub=s;
+  const tb=document.getElementById('btn-tactics');
+  const pb=document.getElementById('btn-planner');
+  if(tb)tb.className='btn '+(s==='tactics'?'asub':'');
+  if(pb)pb.className='btn '+(s==='planner'?'asub':'');
+  renderWSub();
+}
 function renderWSub(){wSub==='tactics'?rWeekTacs():rPlannerInner();}
 function selW(n){setCW(n);rWeek();}
 
@@ -898,6 +905,7 @@ function rDayPlan(){
         <p class="lbl" style="margin-top:1rem">To-Dos — drag onto blocks →<span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)"> stays on list until checked off</span></p>
         <div class="card" style="padding:.75rem 1rem;max-height:220px;overflow-y:auto">
           ${activeTodos().length?sortTodos(activeTodos()).map(t=>`<div class="drag-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')"><span class="dh">⠿</span><div style="flex:1;min-width:0;word-break:break-word">${t.text}</div><span class="pri-pill ${priLabel(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span></div>`).join(''):'<div class="empty">No pending to-dos.</div>'}
+        </div>
         ${(function(){
           const evs=D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]?D.calEvents[w][d]:[];
           if(!evs.length)return '';
@@ -915,7 +923,6 @@ function rDayPlan(){
             }).join('')
             +'</div>';
         })()}
-        </div>
       </div>
     </div>`;
 }
