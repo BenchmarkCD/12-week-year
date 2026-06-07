@@ -6,6 +6,7 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
 <title>Dana's 12 Week Year Planner</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:#f8f9fa;color:#1a1a1a;padding:12px;max-width:1200px;margin:0 auto}
@@ -532,14 +533,14 @@ function rToday(){
       const bg=b.t==='strategic'?'var(--bbg)':b.t==='buffer'?'var(--abg)':b.t==='breakout'?'var(--gbg)':b.t==='mit'?'linear-gradient(135deg,#2D1B69,#4A2C8A)':'var(--bg2)';
       let items='';
       (b.sts||[]).forEach(function(raw){
-        if(raw.startsWith('tac:')){const tac=p.tactics.find(function(t){return t.id===raw.slice(4);});if(tac)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;color:var(--t2)">• '+tac.text+'</div>';}
-        else{const td=D.todos.find(function(t){return t.id===raw;});if(td)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;color:var(--t2);'+(td.done?'text-decoration:line-through;opacity:.5':'')+'">• '+td.text+'</div>';}
+        if(raw.startsWith('tac:')){const tac=p.tactics.find(function(t){return t.id===raw.slice(4);});if(tac)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;color:'+(b.t==="mit"?"rgba(255,255,255,.85)":"var(--t2)")+';">• '+tac.text+'</div>';}
+        else{const td=D.todos.find(function(t){return t.id===raw;});if(td)items+='<div style="font-size:11px;padding:2px 0 2px 8px;border-left:2px solid '+col+';margin-top:3px;color:'+(b.t==="mit"?"rgba(255,255,255,.85)":"var(--t2)")+';;'+(td.done?'text-decoration:line-through;opacity:.5':'')+'">• '+td.text+'</div>';}
       });
       tlHtml+='<div style="border-radius:8px;padding:7px 10px;margin-bottom:4px;background:'+bg+';border-left:4px solid '+col+'">'
         +'<div style="display:flex;align-items:center;gap:8px">'
           +'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:'+col+';color:#fff;flex-shrink:0">'+BTYPES[b.t].label+'</span>'
-          +'<span style="font-size:13px;font-weight:500;flex:1">'+b.title+'</span>'
-          +'<span style="font-size:11px;opacity:.6">'+SLOTS[b.s].label+' · '+ds+'</span>'
+          +'<span style="font-size:13px;font-weight:500;flex:1;'+(b.t==="mit"?"color:#fff;":"")+'">'+ b.title+'</span>'
+          +'<span style="font-size:11px;opacity:.8;'+(b.t==="mit"?"color:#fff;":"")+'">'+ SLOTS[b.s].label+' · '+ds+'</span>'
         +'</div>'+items+'</div>';
     });
   } else {
@@ -744,6 +745,7 @@ function rWeek(){
       <div style="font-size:26px;font-weight:800;color:${sc>=85?'var(--green)':sc>=60?'var(--amber)':'var(--t2)'}">${sc}%</div>
     </div>
     <div class="ws">${Array.from({length:wc},(_,i)=>{const lbl=p.hasPlanWeek?(i===0?'P':i===13?'R':i):(i===13?'R':i);const cls=i===getCW()?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===13?'w13':'';return`<button class="wb ${cls}" onclick="selW(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
+    <div style="margin-bottom:.75rem"><button class="btn green" style="width:100%;padding:9px;font-size:13px" onclick="openWeeklyWizard()">📋 Plan My Week</button></div>
     <div style="margin-bottom:1rem"><input type="text" value="${intention}" placeholder="This week I'm focused on… (weekly intention)" onchange="saveIntent(${w},this.value)" style="width:100%;padding:8px 12px;font-size:13px;border-radius:var(--rs);border:1px solid var(--bdr);background:#fff;color:inherit"></div>
     <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">
       <button class="btn ${wSub==='tactics'?'asub':''}" onclick="setWSub('tactics')">Tactics</button>
@@ -1947,7 +1949,11 @@ async function syncCalendarsIn() {
   }
   D.lastCalSync = new Date().toISOString();
   sv();
-  // Re-render if on today or planner
+  console.log('Cal sync complete. imported:', imported, 'events stored:', JSON.stringify(Object.keys(D.calEvents||{})));
+  // Log week 8 (current week) events for debugging
+  const cw = getCW();
+  console.log('Events for current week '+cw+':', D.calEvents && D.calEvents[cw] ? JSON.stringify(D.calEvents[cw]) : 'none');
+  // Re-render
   const activePage = document.querySelector('.page.active');
   if (activePage) {
     const pid = activePage.id;
