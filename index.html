@@ -814,6 +814,19 @@ function rDayPlan(){
   const blocks=getDayBlocks(w,d);
   const dayTacs=tacsForDay(p,w,d);
   const occ={};blocks.forEach((b,bi)=>{for(let s=b.s;s<b.e;s++)occ[s]=bi;});
+  // Pre-process calendar events into slot map
+  const calSlots={};
+  if(D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]){
+    D.calEvents[w][d].forEach(function(ev){
+      if(ev.allDay)return;
+      const start=new Date(ev.start);const end=ev.end?new Date(ev.end):new Date(start.getTime()+30*60000);
+      const sSlot=Math.floor((start.getHours()*60+start.getMinutes())/15);
+      const eSlot=Math.ceil((end.getHours()*60+end.getMinutes())/15);
+      if(sSlot>=0&&sSlot<SLOTS.length&&!calSlots[sSlot]){
+        calSlots[sSlot]={ev,eSlot};
+      }
+    });
+  }
   let grid='';let skip=-1;
   for(let i=0;i<SLOTS.length;i++){
     const sl=SLOTS[i];if(i<skip)continue;
@@ -840,6 +853,21 @@ function rDayPlan(){
         </div>
       </div>`;
       skip=b.e;
+    } else if(calSlots[i]) {
+      // Calendar event starts at this slot
+      const {ev:cev,eSlot}=calSlots[i];
+      const cdur=(eSlot-i)*15;const cdh=Math.floor(cdur/60),cdm=cdur%60;
+      const cds=cdh>0?(cdm?cdh+'h '+cdm+'m':cdh+'h'):cdm+'m';
+      const cts=new Date(cev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      grid+=`<div class="trow ${sl.isHour?'hour':''}" id="sr-${i}" style="min-height:${Math.max(32,(eSlot-i)*22)}px">
+        <div class="tlbl ${sl.isHour?'oh':''}">${sl.label}</div>
+        <div style="flex:1;padding:5px 8px;background:${cev.color}22;border-left:3px solid ${cev.color};display:flex;align-items:center;gap:8px;border-radius:0 3px 3px 0">
+          <span style="width:9px;height:9px;border-radius:50%;background:${cev.color};flex-shrink:0"></span>
+          <span style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cev.title}</span>
+          <span style="font-size:11px;color:var(--t3);flex-shrink:0">${cds}</span>
+        </div>
+      </div>`;
+      skip=eSlot;
     } else {
       grid+=`<div class="trow ${sl.isHour?'hour':''}" id="sr-${i}" ondragover="onDO(event,${i})" ondragleave="onDL(event)" ondrop="onDrop(event,${w},${d},${i})" onclick="openBP(${w},${d},${i})">
         <div class="tlbl ${sl.isHour?'oh':''}">${sl.label}</div>
@@ -848,44 +876,7 @@ function rDayPlan(){
     }
   }
 
-  // Add Google Calendar events as visual slots in the grid
-  if(D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]){
-    D.calEvents[w][d].forEach(function(ev){
-      if(ev.allDay)return; // all-day shown in right column
-      const start=new Date(ev.start);const end=ev.end?new Date(ev.end):new Date(start.getTime()+30*60000);
-      const startMins=start.getHours()*60+start.getMinutes();
-      const endMins=end.getHours()*60+end.getMinutes();
-      const startSlot=Math.floor(startMins/15);const endSlot=Math.ceil(endMins/15);
-      if(startSlot<0||startSlot>=SLOTS.length)return; // bounds check
-      // Check no overlap with existing blocks
-      let hasOverlap=false;for(let s=startSlot;s<endSlot;s++)if(occ[s]!==undefined)hasOverlap=true;
-      if(hasOverlap)return;
-      // Inject into grid at correct position
-      const slotLabel=SLOTS[startSlot]?SLOTS[startSlot].label:'';
-      const dur=endMins-startMins;const dh=Math.floor(dur/60),dm=dur%60;
-      const ds=dh>0?(dm?dh+'h '+dm+'m':dh+'h'):dm+'m';
-      const rowHtml='<div class="trow '+(SLOTS[startSlot]&&SLOTS[startSlot].isHour?'hour':'')+'" style="min-height:'+Math.max(28,(endSlot-startSlot)*24)+'px">'
-        +'<div class="tlbl '+(SLOTS[startSlot]&&SLOTS[startSlot].isHour?'oh':'')+'">'+slotLabel+'</div>'
-        +'<div style="flex:1;padding:5px 8px;background:'+ev.color+'22;border-left:3px solid '+ev.color+';display:flex;align-items:flex-start;flex-direction:column;gap:2px">'
-          +'<div style="display:flex;align-items:center;gap:6px;width:100%">'
-            +'<span style="width:8px;height:8px;border-radius:50%;background:'+ev.color+';flex-shrink:0"></span>'
-            +'<span style="font-size:12px;font-weight:500;flex:1;color:inherit">'+ev.title+'</span>'
-            +'<span style="font-size:11px;opacity:.6">'+ds+'</span>'
-          +'</div>'
-        +'</div>'
-      +'</div>';
-      // Insert at correct position in grid string
-      const marker='id="sr-'+startSlot+'"';
-      if(grid.includes(marker)){
-        // Replace the empty slot row with the cal event
-        const rowStart=grid.lastIndexOf('<div class="trow',grid.indexOf(marker));
-        const rowEnd=grid.indexOf('</div>',grid.indexOf(marker))+6;
-        grid=grid.slice(0,rowStart)+rowHtml+grid.slice(rowEnd);
-        for(let s=startSlot;s<endSlot;s++)occ[s]=-1; // mark as occupied
-      }
-    });
-  }
-  document.getElementById('dpc').innerHTML=`
+    document.getElementById('dpc').innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div style="font-size:15px;font-weight:700">${DAYS[d]}, ${fd(ddate(w,d))}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
