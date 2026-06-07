@@ -2105,26 +2105,28 @@ function openWeeklyWizard() {
     const evs = calEventsThisWeek[d] || [];
     const blocks = getDayBlocks(w, d);
     calHtml += '<div style="font-size:11px;font-weight:600;color:var(--t2);margin-top:8px;padding-top:6px;border-top:1px solid var(--bdr)">' + DAYS[d] + '</div>';
-    // Show time blocks first
-    if (blocks.length) {
-      blocks.forEach(function(b) {
-        const sm = b.s * 15; const sh = Math.floor(sm/60), smin = sm%60;
-        const em = b.e * 15; const eh = Math.floor(em/60), emin = em%60;
-        const ts = (sh===0?12:sh>12?sh-12:sh) + ':' + smin.toString().padStart(2,'0') + ' ' + (sh<12?'AM':'PM');
-        const te = (eh===0?12:eh>12?eh-12:eh) + ':' + emin.toString().padStart(2,'0') + ' ' + (eh<12?'AM':'PM');
-        const col = b.t==='mit'?'#9B59B6':b.t==='strategic'?'var(--blue)':b.t==='buffer'?'var(--amber)':b.t==='breakout'?'var(--green)':'rgba(0,0,0,.2)';
-        calHtml += '<div class="cal-event"><div class="cal-dot" style="background:'+col+'"></div><div><div style="font-weight:500">['+BTYPES[b.t].label+'] '+b.title+'</div><div style="color:var(--t3)">'+ts+' – '+te+'</div></div></div>';
-      });
-    }
-    // Then show Google Calendar events
-    if (evs.length) {
-      evs.forEach(function(ev) {
-        const start = ev.allDay ? 'All day' : new Date(ev.start).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-        const end = ev.end && !ev.allDay ? ' – ' + new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
-        calHtml += '<div class="cal-event"><div class="cal-dot" style="background:'+ev.color+'"></div><div><div style="font-weight:500">'+ev.title+'</div><div style="color:var(--t3)">'+start+end+'</div></div></div>';
-      });
-    }
-    if (!blocks.length && !evs.length) {
+    // Build unified list sorted by start time
+    const items = [];
+    blocks.forEach(function(b) {
+      const sm = b.s * 15;
+      const em = b.e * 15;
+      const sh = Math.floor(sm/60), smin = sm%60;
+      const eh = Math.floor(em/60), emin = em%60;
+      const fmt = function(h,m){return (h===0?12:h>12?h-12:h)+':'+m.toString().padStart(2,'0')+' '+(h<12?'AM':'PM');};
+      const col = b.t==='mit'?'#9B59B6':b.t==='strategic'?'#2D7DD2':b.t==='buffer'?'#F0A500':b.t==='breakout'?'#1D9E75':'#999';
+      items.push({sortKey:sm, html:'<div class="cal-event"><div class="cal-dot" style="background:'+col+'"></div><div><div style="font-weight:500">['+BTYPES[b.t].label+'] '+b.title+'</div><div style="color:var(--t3)">'+fmt(sh,smin)+' – '+fmt(eh,emin)+'</div></div></div>'});
+    });
+    evs.forEach(function(ev) {
+      const startDt = new Date(ev.start);
+      const sortKey = ev.allDay ? -1 : startDt.getHours()*60+startDt.getMinutes();
+      const ts = ev.allDay ? 'All day' : startDt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      const te = ev.end&&!ev.allDay ? ' – '+new Date(ev.end).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
+      items.push({sortKey:sortKey, html:'<div class="cal-event"><div class="cal-dot" style="background:'+ev.color+'"></div><div><div style="font-weight:500">'+ev.title+'</div><div style="color:var(--t3)">'+ts+te+'</div></div></div>'});
+    });
+    items.sort(function(a,b){return a.sortKey-b.sortKey;});
+    if (items.length) {
+      items.forEach(function(item){calHtml += item.html;});
+    } else {
       calHtml += '<div style="font-size:11px;color:var(--t3);padding:3px 0">No blocks or events</div>';
     }
   }
@@ -2167,7 +2169,7 @@ function openWeeklyWizard() {
 
         // Step 4: Calendar this week
         + '<div style="margin-bottom:1rem">'
-          + '<div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📅 Already on Your Calendar</div>'
+          + '<div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📅 Your Week at a Glance</div>'
           + calHtml
         + '</div>'
 
