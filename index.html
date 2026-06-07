@@ -1005,19 +1005,34 @@ function onTodoListDrop(event, targetId) {
   event.preventDefault();
   event.stopPropagation();
   document.querySelectorAll('.todo-item').forEach(function(el){el.style.borderTop='';el.style.borderBottom='';});
-  const dragId = event.dataTransfer.getData('text/plain').replace('todo:','');
+  const raw = event.dataTransfer.getData('text/plain');
+  const dragId = raw.startsWith('todo:') ? raw.slice(5) : raw;
   if (!dragId || dragId === targetId) return;
-  // Only reorder if both are todos (not dragging to planner)
-  const fromIdx = D.todos.findIndex(function(t){return t.id===dragId;});
-  const toIdx = D.todos.findIndex(function(t){return t.id===targetId;});
-  if (fromIdx === -1 || toIdx === -1) return;
-  // Determine insert position
+  const dragged = D.todos.find(function(t){return t.id===dragId;});
+  const target = D.todos.find(function(t){return t.id===targetId;});
+  if (!dragged || !target) return;
+  // Determine insert position (above or below target)
   const item = event.currentTarget;
   const rect = item.getBoundingClientRect();
   const insertBefore = event.clientY < (rect.top + rect.height / 2);
-  const moved = D.todos.splice(fromIdx, 1)[0];
-  const newToIdx = D.todos.findIndex(function(t){return t.id===targetId;});
-  D.todos.splice(insertBefore ? newToIdx : newToIdx + 1, 0, moved);
+  // Assign priority of the neighbor we're landing next to
+  // If dropping before target: adopt target's priority
+  // If dropping after target: adopt target's priority  
+  // If there's an item on the other side, pick whichever matches better
+  const pending = sortTodos(D.todos.filter(function(t){return !t.done;}));
+  const targetPosInSorted = pending.findIndex(function(t){return t.id===targetId;});
+  let newPri = parseInt(target.pri||3);
+  if (!insertBefore && targetPosInSorted < pending.length - 1) {
+    // Dropping after target — use average of target and next item's priority
+    const nextItem = pending[targetPosInSorted + 1];
+    if (nextItem && nextItem.id !== dragId) {
+      const nextPri = parseInt(nextItem.pri||3);
+      newPri = Math.round((parseInt(target.pri||3) + nextPri) / 2);
+    }
+  }
+  dragged.pri = String(Math.max(1, Math.min(5, newPri)));
+  // Reorder: remove from current position and let sortTodos handle display
+  // Just update priority — sortTodos will re-sort automatically
   sv();
   renderTSub();
 }
