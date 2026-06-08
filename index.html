@@ -406,7 +406,8 @@ let dragId=null,dragType=null;
 function quickCapture(){
   const inp=document.getElementById('qc-inp');const pri=document.getElementById('qc-pri').value;
   const text=inp.value.trim();if(!text)return;
-  D.todos.push({id:'td-'+Date.now(),text,pri,done:false,sr:[]});sv();inp.value='';
+  const qco=D.todos.reduce(function(m,t){return Math.max(m,t.order||0);},0);
+  D.todos.push({id:'td-'+Date.now(),text,pri,done:false,sr:[],order:qco+1});sv();inp.value='';
   toast('Captured! ✓');
 }
 
@@ -732,7 +733,8 @@ function renderTSub(){
       </div>`;
   }
 }
-function addTodo(){const inp=document.getElementById('td-inp');const pri=document.getElementById('td-pri').value;const text=inp.value.trim();if(!text)return;D.todos.push({id:'td-'+Date.now(),text,pri,done:false,sr:[]});sv();inp.value='';renderTSub();}
+function addTodo(){const inp=document.getElementById('td-inp');const pri=document.getElementById('td-pri').value;const text=inp.value.trim();if(!text)return;const mo=D.todos.reduce(function(m,t){return Math.max(m,t.order||0);},0);
+  D.todos.push({id:'td-'+Date.now(),text,pri,done:false,sr:[],order:mo+1});sv();inp.value='';renderTSub();}
 function completeTodo(id,el){const t=D.todos.find(x=>x.id===id);if(!t)return;if(t.sr)t.sr.forEach(ref=>{const blks=getDayBlocks(ref.w,ref.d);blks.forEach(b=>{if(b.sts)b.sts=b.sts.filter(s=>s!==id);});setDayBlocks(ref.w,ref.d,blks);});t.done=true;t.sr=[];sv();el.classList.add('on');celebrate('✓ Done! '+randEnc());setTimeout(()=>renderTSub(),500);}
 function removeTodo(id){const t=D.todos.find(x=>x.id===id);if(t&&t.sr)t.sr.forEach(ref=>{const blks=getDayBlocks(ref.w,ref.d);blks.forEach(b=>{if(b.sts)b.sts=b.sts.filter(s=>s!==id);});setDayBlocks(ref.w,ref.d,blks);});D.todos=D.todos.filter(x=>x.id!==id);sv();renderTSub();}
 function restoreTodo(id){const t=D.todos.find(x=>x.id===id);if(t){t.done=false;sv();renderTSub();}}
@@ -752,7 +754,7 @@ function cyclePri(id){const t=D.todos.find(x=>x.id===id);if(!t)return;const n=pa
 function moveToSomeday(id){const t=D.todos.find(x=>x.id===id);if(!t)return;D.someday.push({id:'sd-'+Date.now(),text:t.text});D.todos=D.todos.filter(x=>x.id!==id);sv();renderTSub();}
 function addSomeday(){const inp=document.getElementById('sd-inp');const text=inp.value.trim();if(!text)return;D.someday.push({id:'sd-'+Date.now(),text});sv();inp.value='';renderTSub();}
 function removeSD(id){D.someday=D.someday.filter(x=>x.id!==id);sv();renderTSub();}
-function promoteSD(id){const t=D.someday.find(x=>x.id===id);if(!t)return;D.todos.push({id:'td-'+Date.now(),text:t.text,pri:'3',done:false,sr:[]});D.someday=D.someday.filter(x=>x.id!==id);sv();renderTSub();}
+function promoteSD(id){const t=D.someday.find(x=>x.id===id);if(!t)return;const pso=D.todos.reduce(function(m,x){return Math.max(m,x.order||0);},0);D.todos.push({id:'td-'+Date.now(),text:t.text,pri:'3',done:false,sr:[],order:pso+1});D.someday=D.someday.filter(x=>x.id!==id);sv();renderTSub();}
 
 // ── THIS WEEK ────────────────────────────────────────────────
 let wSub='tactics';
@@ -1705,6 +1707,8 @@ let _bdLines=[];
 function parseBrainDump(){
   const ta=document.getElementById('brain-dump-ta');
   if(!ta)return;
+  // Save current content first
+  D.brainDump=ta.value;sv();
   _bdLines=ta.value.split('\n').map(function(l){return l.trim();}).filter(Boolean);
   if(!_bdLines.length){toast('Nothing to sort yet.');return;}
   let checkboxHtml='';
@@ -1734,14 +1738,23 @@ function confirmBrainDumpSort(){
   lines.forEach(function(line,i){
     const cb=document.getElementById('bd-'+i);
     if(cb&&cb.checked){
-      D.todos.push({id:'td-'+Date.now()+'-'+i,text:line,pri:'3',done:false,sr:[]});
+      const maxOrder = D.todos.reduce(function(m,t){return Math.max(m,t.order||0);}, 0);
+      D.todos.push({id:'td-'+Date.now()+'-'+i,text:line,pri:'3',done:false,sr:[],order:maxOrder+i+1});
       added++;
     }
   });
   _bdLines=[];
   sv();closeModal();
-  if(added)toast(added+' item'+(added>1?'s':'')+' added to To-Dos ✓');
-  rBrainDump();
+  if(added){
+    toast(added+' item'+(added>1?'s':'')+' added to To-Dos ✓');
+    // Switch to To-Dos tab so user can see new items
+    setTimeout(function(){
+      const btn=document.querySelector('.nb:nth-child(2)');
+      showPage('todos',btn);
+    },400);
+  } else {
+    rBrainDump();
+  }
 }
 
 function rArchives(){
