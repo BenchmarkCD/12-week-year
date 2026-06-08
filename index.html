@@ -1691,13 +1691,20 @@ function rBrainDump(){
         +'<button class="btn" onclick="clearBrainDump()">Clear</button>'
       +'</div>'
     +'</div>'
-    +'<textarea class="brain-dump-area" id="brain-dump-ta" placeholder="Just start writing... What is on your mind? What needs doing? What ideas do you have?" onblur="saveBrainDump()">'+(D.brainDump||'')+'</textarea>'
+    +'<textarea class="brain-dump-area" id="brain-dump-ta" placeholder="Just start writing... What is on your mind? What needs doing? What ideas do you have?" oninput="saveBrainDump()" onblur="saveBrainDump()">'+(D.brainDump||'')+'</textarea>'
     +'<div style="font-size:12px;color:var(--t3);margin-top:8px">Auto-saved. Click "Sort into To-Dos" to turn any line into an active to-do.</div>'
     +(D.brainDump?'<div style="font-size:12px;color:var(--t3);margin-top:4px">'+D.brainDump.split(/\n/).filter(function(l){return l.trim();}).length+' lines</div>':'');
 }
 function saveBrainDump(){
   const ta=document.getElementById('brain-dump-ta');
-  if(ta){D.brainDump=ta.value;sv();}
+  if(!ta)return;
+  D.brainDump=ta.value;
+  sv();
+  // Save to Drive immediately (don't wait for debounce)
+  if(gToken&&gapiReady){
+    clearTimeout(window._driveSaveTimer);
+    window._driveSaveTimer=setTimeout(saveToDrive,500);
+  }
 }
 function clearBrainDump(){
   if(!confirm('Clear the brain dump? This cannot be undone.'))return;
@@ -1983,8 +1990,15 @@ async function loadFromDrive() {
         alt: 'media'
       });
       const driveData = typeof res.result === 'string' ? JSON.parse(res.result) : res.result;
-      // Merge drive data over local — drive wins for most things, keep local todos if newer
+      // Preserve local brain dump if it's longer (more recent unsaved content)
+      const localBrainDump = D.brainDump || '';
+      const driveBrainDump = driveData.brainDump || '';
+      // Merge drive data over local
       Object.assign(D, driveData);
+      // Keep local brain dump if it has more content (user was actively writing)
+      if(localBrainDump.length > driveBrainDump.length) {
+        D.brainDump = localBrainDump;
+      }
       CW = D.curWeek && D.curWeek[AP()?.id] !== undefined ? D.curWeek[AP().id] : nowPeriodWeek(AP());
       CD = D.curDay && D.curDay[AP()?.id] !== undefined ? D.curDay[AP().id] : new Date().getDay();
       sv(); // sync back to localStorage
