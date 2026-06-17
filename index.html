@@ -356,10 +356,14 @@ function tacDoneInWeek(p,tid,w){for(let d=0;d<7;d++)if(isChk(p,tid,w,d))return t
 function weekScore(p,w){
   const tacs=tacsForWeek(p,w);if(!tacs.length)return 0;
   let done=0;
-  tacs.forEach(t=>{
+  tacs.forEach(function(t){
     if(t.rec==='onetime'){if(tacDoneInWeek(p,t.id,w))done++;}
     else if(t.rec==='weekly'){if(isChk(p,t.id,w,t.dow))done++;}
-    else if(t.rec==='daily'){let ok=true;for(let d=0;d<7;d++)if(!isChk(p,t.id,w,d)){ok=false;break;}if(ok)done++;}
+    else if(t.rec==='daily'){
+      // Each day counts as 1/7 — partial credit for daily habits
+      let daysChk=0;for(let d=0;d<7;d++)if(isChk(p,t.id,w,d))daysChk++;
+      done+=daysChk/7;
+    }
     else if(t.rec==='ongoing'){if(tacDoneInWeek(p,t.id,w))done++;}
   });
   return Math.round(done/tacs.length*100);
@@ -821,10 +825,14 @@ function rWeekTacs(){
 function togG2(gi){
 document.getElementById('gb2-'+gi)?.classList.toggle('open');document.getElementById('arr2-'+gi)?.classList.toggle('open');}
 function togTWeek(el,tid,w){
-  const p=AP();const cur=Array.from({length:7},(_,d)=>isChk(p,tid,w,d)).some(Boolean);const now=!cur;
+  const p=AP();const cur=Array.from({length:7},function(_,d){return isChk(p,tid,w,d);}).some(Boolean);const now=!cur;
   for(let d=0;d<7;d++)setChk(p,tid,w,d,now);
-  el.classList.toggle('on',now);const tt=el.nextElementSibling;if(tt)tt.classList.toggle('done',now);
-  if(now)celebrate('✓ Tactic complete! '+randEnc());
+  el.classList.toggle('on',now);
+  const tt=el.nextElementSibling;if(tt)tt.classList.toggle('done',now);
+  if(now){celebrate('✓ Tactic complete! '+randEnc());const sc=weekScore(p,w);if(sc>=85)setTimeout(function(){celebrateWeekScore(sc,w);},800);}
+  // Update week score display if visible
+  const scoreEl=document.querySelector('.ws + * .sv');
+  if(scoreEl&&scoreEl.closest('.page.active'))scoreEl.textContent=weekScore(p,getCW())+'%';
 }
 
 // ── DAILY PLANNER ────────────────────────────────────────────
@@ -1535,6 +1543,48 @@ function saveET(id){
 function rmTac(id){if(!confirm('Remove this tactic?'))return;const p=AP();p.tactics=p.tactics.filter(t=>t.id!==id);sv();rMasterPlan();}
 
 // ── NEW PERIOD ───────────────────────────────────────────────
+
+function openEditPeriodModal(){
+  const p=AP();
+  const fmt=function(d){return new Date(d).toISOString().slice(0,10);};
+  document.getElementById('modal-ct').innerHTML=
+    '<div class="modal-overlay" onclick="closeModal(event)">'
+      +'<div class="modal" onclick="event.stopPropagation()">'
+        +'<div class="mt">Edit Current Period</div>'
+        +'<div class="ms">Adjust the period name and start date. This will recalculate all week numbers.</div>'
+        +'<label class="flbl">Period name</label>'
+        +'<input class="minp" type="text" id="ep-name" value="'+p.name+'">'
+        +'<label class="flbl">Week 1 start date</label>'
+        +'<input class="minp" type="date" id="ep-date" value="'+fmt(p.startDate)+'">'
+        +'<label class="flbl">Has planning week before Week 1?</label>'
+        +'<select class="minp" id="ep-plan" style="margin-top:0">'
+          +'<option value="no" '+(p.hasPlanWeek?'':'selected')+'>No — Week 1 starts on the date above</option>'
+          +'<option value="yes" '+(p.hasPlanWeek?'selected':'')+'>Yes — Planning Week before Week 1</option>'
+        +'</select>'
+        +'<div style="background:var(--abg);border:1px solid var(--amber);border-radius:var(--rs);padding:.625rem .875rem;font-size:12px;color:#7A4F00;margin-top:8px">'
+          +'⚠ Changing the start date recalculates week numbers. Your tactic completions and block schedules stay intact but may shift weeks.'
+        +'</div>'
+        +'<div class="mfooter">'
+          +'<button onclick="closeModal()">Cancel</button>'
+          +'<button class="primary" onclick="saveEditPeriod()">Save</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+}
+function saveEditPeriod(){
+  const p=AP();
+  const name=document.getElementById('ep-name').value.trim();
+  const dateVal=document.getElementById('ep-date').value;
+  const hasPlan=document.getElementById('ep-plan').value==='yes';
+  if(!dateVal){toast('Please set a start date.');return;}
+  if(name)p.name=name;
+  p.startDate=new Date(dateVal+'T12:00:00').setHours(0,0,0,0);
+  p.hasPlanWeek=hasPlan;
+  sv();closeModal();
+  // Re-migrate period name to season if using auto-name
+  toast('Period updated ✓');
+  rToday();
+}
 function openNewPeriodModal(){
   const p=AP();const wc=periodWeekCount(p);
   // New period start = day after last week of current period ends
