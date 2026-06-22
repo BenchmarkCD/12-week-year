@@ -1841,7 +1841,7 @@ function rArchives(){
 // ── BACKUP/RESTORE ───────────────────────────────────────────
 function toggleBackupMenu(){const m=document.getElementById('backup-menu');if(m)m.style.display=m.style.display==='none'?'block':'none';}
 function exportBackup(){toggleBackupMenu();const data=JSON.stringify(D,null,2);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download=`12wy-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();toast('Backup downloaded ✓');}
-function importBackup(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);Object.assign(D,data);sv();toast('Backup restored ✓');rToday();}catch(err){toast('Could not read backup file.');}};reader.readAsText(file);}
+function importBackup(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);Object.assign(D,data);sv();toast('Backup restored ✓ — pushing to Drive...');rToday();if(gToken&&gapiReady){saveToDrive().then(function(){toast('Backup saved to Drive ✓');});}}catch(err){toast('Could not read backup file.');}};reader.readAsText(file);}
 
 // ── MODAL ────────────────────────────────────────────────────
 
@@ -2091,12 +2091,14 @@ function signOut() {
 async function loadFromDrive() {
   setSyncStatus('syncing', 'Loading...');
   try {
+    console.log('loadFromDrive: token expiry in', Math.round((gToken.expiry-Date.now())/1000), 'seconds');
     // Find existing file
-    const list = await withTokenRefresh(function(){return gapi.client.drive.files.list({
+    const list = await gapi.client.drive.files.list({
       spaces: 'appDataFolder',
       q: 'name=\''+DRIVE_FILE_NAME+'\' and trashed=false',
       fields: 'files(id,name)'
-    })});
+    });
+    console.log('Drive files list result:', JSON.stringify(list.result));
     const files = list.result.files || [];
     if (files.length > 0) {
       gDriveFileId = files[0].id;
@@ -2177,6 +2179,7 @@ async function saveToDrive() {
       const data = await res.json();
       gDriveFileId = data.id;
     }
+    console.log('saveToDrive: success, fileId='+gDriveFileId);
     setSyncStatus('synced', '● Synced ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'}));
   } catch(e) {
     console.warn('Drive save error:', e);
@@ -2225,13 +2228,15 @@ async function loadCalendars() {
     // Filter out non-Google calendar IDs (e.g. Yahoo addresses) that will 404
     const validCals = rawCals.filter(function(c) {
       const id = c.id || '';
-      // Skip if it looks like a non-Google email address
+      // Skip non-Google email addresses
       if (id.includes('@yahoo.') || id.includes('@hotmail.') || 
           id.includes('@outlook.') || id.includes('@live.') ||
           id.includes('@icloud.') || id.includes('@me.com')) {
         console.log('Skipping non-Google calendar:', id);
         return false;
       }
+      // Keep @import.calendar.google.com calendars — these are valid imported calendars
+      // (iCloud shared calendars show up this way and DO work)
       return true;
     });
     gCalendars = validCals.map(function(c) {
@@ -2245,9 +2250,12 @@ async function loadCalendars() {
     });
     // Also clean up any previously saved invalid calendars
     if (D.selectedCals) {
+      // Remove previously known-bad calendars
+      const knownBad = D._badCalendars || [];
       D.selectedCals = D.selectedCals.filter(function(id) {
         return !id.includes('@yahoo.') && !id.includes('@hotmail.') && 
-               !id.includes('@outlook.') && !id.includes('@live.');
+               !id.includes('@outlook.') && !id.includes('@live.') &&
+               !knownBad.includes(id);
       });
     }
     // Default: select all calendars
@@ -2316,11 +2324,14 @@ async function syncCalendarsIn() {
       } catch(e) {
         console.warn('Cal sync error for ' + calId, e);
         // If 404, this calendar doesn't exist in Google Calendar — remove it silently
-        if (e && e.status === 404) {
+        if (e && (e.status === 404 || (e.result && e.result.error && e.result.error.code === 404))) {
           console.log('Removing invalid calendar:', calId);
           if (D.selectedCals) D.selectedCals = D.selectedCals.filter(function(id){return id !== calId;});
           gCalendars = gCalendars.filter(function(c){return c.id !== calId;});
+          if (!D._badCalendars) D._badCalendars = [];
+          if (!D._badCalendars.includes(calId)) D._badCalendars.push(calId);
           sv();
+          break; // Stop trying other weeks for this calendar
         }
       }
     }
