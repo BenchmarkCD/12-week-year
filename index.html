@@ -1251,7 +1251,7 @@ function rReview(){
   document.getElementById('page-review').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem;flex-wrap:wrap;gap:8px"><div style="font-size:15px;font-weight:700">Weekly Review<button class="btn" style="margin-left:12px;border-color:#9B59B6;color:#9B59B6;font-size:12px;padding:4px 12px" onclick="openMeetingMode()">📋 Meeting Mode</button><span class="period-badge">${p.name}</span></div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:1.25rem">Every Monday — review last week, set intention, prepare for accountability meeting.</div>
-    <div class="ws">${Array.from({length:wc},(_,i)=>{const lbl=p.hasPlanWeek&&i===0?'Plan':i===wc-1?'R':i;return`<button class="wb ${i===cw?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===wc-1?'w13':''}" onclick="selWRev(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
+    <div class="ws">${Array.from({length:14},(_,i)=>{if(i===0&&!p.hasPlanWeek)return '';const lbl=i===0&&p.hasPlanWeek?'Plan':i===13?'R&R':String(i);const mw=lbl.length>2?'44px':'36px';return`<button class="wb ${i===cw?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===13?'w13':''}" style="min-width:${mw}" onclick="selWRev(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
     <div style="text-align:center;margin-bottom:1.5rem">
       <div style="font-size:13px;color:var(--t2);margin-bottom:.25rem">${periodWeekLabel(p,pw)} score</div>
       <div class="rpct ${cc}">${psc}%</div>
@@ -1276,7 +1276,7 @@ function rReview(){
     <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--bdr)">
       <p class="lbl">All-week scorecard</p>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${Array.from({length:wc},(_,i)=>{const sc=weekScore(p,i);const hasTacs=tacsForWeek(p,i).length>0;const lbl=p.hasPlanWeek?(i===0?'Plan':i===wc-1?'R&R':`W${i}`):(i===wc-1?'R&R':`W${i}`);return hasTacs||i<=cw?`<div style="text-align:center;min-width:42px;background:var(--bg2);border-radius:var(--rs);padding:6px 4px"><div style="font-size:10px;color:var(--t3)">${lbl}</div><div style="font-size:14px;font-weight:700;color:${sc>=85?'var(--green)':sc>=60?'var(--amber)':'var(--t2)'}">${sc}%</div></div>`:''}).join('')}
+        ${Array.from({length:14},(_,i)=>{if(i===0&&!p.hasPlanWeek)return '';const sc=weekScore(p,i);const hasTacs=tacsForWeek(p,i).length>0;const lbl=i===0&&p.hasPlanWeek?'Plan':i===13?'R&R':`W${i}`;return hasTacs||i<=cw?`<div style="text-align:center;min-width:42px;background:var(--bg2);border-radius:var(--rs);padding:6px 4px"><div style="font-size:10px;color:var(--t3)">${lbl}</div><div style="font-size:14px;font-weight:700;color:${sc>=85?'var(--green)':sc>=60?'var(--amber)':'var(--t2)'}">${sc}%</div></div>`:''}).join('')}
       </div>
     </div>
     <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--bdr)">
@@ -2040,13 +2040,32 @@ async function loadFromDrive() {
         alt: 'media'
       });
       const driveData = typeof res.result === 'string' ? JSON.parse(res.result) : res.result;
-      // Preserve local brain dump if it's longer (more recent unsaved content)
+      // Safety: only use Drive data if it looks valid and has content
+      const driveHasPeriods = driveData && driveData.periods && driveData.periods.length > 0;
+      const localHasPeriods = D && D.periods && D.periods.length > 0;
       const localBrainDump = D.brainDump || '';
       const driveBrainDump = driveData.brainDump || '';
-      // Merge drive data over local
-      Object.assign(D, driveData);
-      // Keep local brain dump if it has more content (user was actively writing)
-      if(localBrainDump.length > driveBrainDump.length) {
+      if (driveHasPeriods) {
+        // Drive data looks valid — merge it in
+        // But keep local data if it has more periods or todos (more recent)
+        const driveScore = (driveData.periods||[]).length * 100 + (driveData.todos||[]).length;
+        const localScore = (D.periods||[]).length * 100 + (D.todos||[]).length;
+        if (driveScore >= localScore) {
+          Object.assign(D, driveData);
+        } else {
+          // Local has more data — just update non-critical fields from Drive
+          if (driveData.calEvents) D.calEvents = driveData.calEvents;
+          if (driveData.selectedCals) D.selectedCals = driveData.selectedCals;
+          console.log('Keeping local data (more complete than Drive)');
+        }
+      } else if (!localHasPeriods) {
+        // Neither has data — use Drive anyway
+        Object.assign(D, driveData);
+      } else {
+        console.log('Drive data empty/invalid, keeping local data');
+      }
+      // Always keep longer brain dump
+      if(localBrainDump.length > (D.brainDump||'').length) {
         D.brainDump = localBrainDump;
       }
       CW = D.curWeek && D.curWeek[AP()?.id] !== undefined ? D.curWeek[AP().id] : nowPeriodWeek(AP());
