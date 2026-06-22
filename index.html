@@ -1889,7 +1889,7 @@ rToday();
 // ═══════════════════════════════════════════════════════════════
 // GOOGLE AUTH + CALENDAR + DRIVE
 // ═══════════════════════════════════════════════════════════════
-const GCLIENT_ID = '868237314554-gh6gra317girj7h18ikh3h28q6ppj28a.apps.googleusercontent.com';
+const GCLIENT_ID = '868237314554-35v2nmhpemjj5elpje0puf17mf8pfinm.apps.googleusercontent.com';
 const GSCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.appdata profile email';
 const DRIVE_FILE_NAME = '12wy-planner-data.json';
 
@@ -1901,6 +1901,67 @@ let gTokenClient = null;
 let gapiReady = false;
 let syncPending = false;
 
+
+// Auto-refresh expired token silently
+function refreshTokenIfNeeded(callback) {
+  if (!gToken) { callback(false); return; }
+  // If token expires in less than 5 minutes, refresh it
+  const fiveMin = 5 * 60 * 1000;
+  if (gToken.expiry - Date.now() < fiveMin) {
+    console.log('Token expiring soon, refreshing...');
+    if (!gTokenClient) { callback(false); return; }
+    // Request new token silently (no prompt)
+    const oldCallback = gTokenClient.callback;
+    gTokenClient.callback = function(resp) {
+      gTokenClient.callback = oldCallback;
+      if (resp.error) { console.warn('Silent refresh failed:', resp); callback(false); return; }
+      gapi.client.setToken({access_token: resp.access_token});
+      const tok = {
+        access_token: resp.access_token,
+        expiry: Date.now() + (resp.expires_in * 1000),
+        profile: gToken.profile
+      };
+      gToken = tok;
+      localStorage.setItem('12wy_gtoken', JSON.stringify(tok));
+      setSyncStatus('synced', '● Synced');
+      callback(true);
+    };
+    try {
+      gTokenClient.requestAccessToken({prompt: ''});
+    } catch(e) {
+      console.warn('Token refresh error:', e);
+      callback(false);
+    }
+  } else {
+    callback(true); // Token still valid
+  }
+}
+
+// Handle 403 errors by refreshing token and retrying
+async function withTokenRefresh(fn) {
+  try {
+    return await fn();
+  } catch(e) {
+    if (e && (e.status === 403 || e.result && e.result.error && e.result.error.code === 403)) {
+      console.log('403 error — refreshing token and retrying...');
+      setSyncStatus('syncing', '↻ Refreshing...');
+      return new Promise(function(resolve, reject) {
+        refreshTokenIfNeeded(function(ok) {
+          if (ok) {
+            fn().then(resolve).catch(reject);
+          } else {
+            // Can't refresh silently — show sign-in button
+            setSyncStatus('error', '⚠ Session expired — sign in again');
+            const ao = document.getElementById('auth-overlay');
+            if (ao) ao.style.display = 'flex';
+            reject(e);
+          }
+        });
+      });
+    }
+    throw e;
+  }
+}
 // Init once APIs are loaded
 function initGoogleApis() {
   // Load GAPI
@@ -1934,13 +1995,17 @@ function tryAutoSignIn() {
   if (saved) {
     try {
       const tok = JSON.parse(saved);
-      if (tok.expiry > Date.now()) {
+      // Give 30 second buffer to account for clock skew
+      if (tok.expiry > Date.now() + 30000) {
         gToken = tok;
         if (typeof gapi !== 'undefined' && gapi.client) {
           gapi.client.setToken({access_token: gToken.access_token});
         }
         onSignedIn(tok.profile);
         return;
+      } else {
+        console.log('Saved token expired, clearing...');
+        localStorage.removeItem('12wy_gtoken');
       }
     } catch(e) {}
   }
@@ -2027,11 +2092,11 @@ async function loadFromDrive() {
   setSyncStatus('syncing', 'Loading...');
   try {
     // Find existing file
-    const list = await gapi.client.drive.files.list({
+    const list = await withTokenRefresh(function(){return gapi.client.drive.files.list({
       spaces: 'appDataFolder',
       q: 'name=\''+DRIVE_FILE_NAME+'\' and trashed=false',
       fields: 'files(id,name)'
-    });
+    })});
     const files = list.result.files || [];
     if (files.length > 0) {
       gDriveFileId = files[0].id;
@@ -2138,8 +2203,17 @@ let _autoSyncInterval = null;
 function scheduleAutoSync() {
   if (_autoSyncInterval) clearInterval(_autoSyncInterval);
   _autoSyncInterval = setInterval(function() {
-    if (gToken) { syncCalendarsIn(); saveToDrive(); }
+    if (gToken) {
+      // Refresh token if needed before syncing
+      refreshTokenIfNeeded(function(ok) {
+        if (ok) { syncCalendarsIn(); saveToDrive(); }
+      });
+    }
   }, 5 * 60 * 1000); // every 5 minutes
+  // Also refresh token proactively every 45 minutes
+  setInterval(function() {
+    if (gToken) refreshTokenIfNeeded(function(){});
+  }, 45 * 60 * 1000);
 }
 
 // ── CALENDAR SYNC ─────────────────────────────────────────────
