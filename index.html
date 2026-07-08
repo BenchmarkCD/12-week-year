@@ -332,7 +332,11 @@ function ff(d){return d.toLocaleDateString('en-US',{weekday:'long',month:'long',
 // ── TACTIC HELPERS ───────────────────────────────────────────
 function tacsForWeek(p,w){
   return p.tactics.filter(t=>{
-    if(t.rec==='onetime')return t.dueWeek===w||t.carriedTo===w;
+    if(t.rec==='onetime'){
+      // If carried to a different week, only show there (not in original dueWeek)
+      if(t.carriedTo!==undefined&&t.carriedTo!==t.dueWeek)return t.carriedTo===w;
+      return t.dueWeek===w;
+    }
     if(t.rec==='weekly')return true;
     if(t.rec==='daily')return true;
     if(t.rec==='ongoing')return true;
@@ -341,7 +345,10 @@ function tacsForWeek(p,w){
 }
 function tacsForDay(p,w,d){
   return p.tactics.filter(t=>{
-    if(t.rec==='onetime')return t.dueWeek===w||t.carriedTo===w;
+    if(t.rec==='onetime'){
+      if(t.carriedTo!==undefined&&t.carriedTo!==t.dueWeek)return t.carriedTo===w;
+      return t.dueWeek===w;
+    }
     if(t.rec==='weekly')return t.dow===d;
     if(t.rec==='daily')return true;
     if(t.rec==='ongoing')return true;
@@ -443,16 +450,56 @@ function streakHtml(){
 }
 
 // ── QUOTE OF THE WEEK ─────────────────────────────────────────
+const DAILY_DEVOTIONAL = [
+  // Sunday (0)
+  {
+    affirmation: 'Today I choose rest over striving. I trust that God is working even when I am not. My identity is not bound in my production, but in being a child of God.',
+    verse: '"Unless the Lord builds the house, those who build it labor in vain."',
+    ref: 'Psalm 127:1'
+  },
+  // Monday (1)
+  {
+    affirmation: 'Today I believe that God is directing every step I take. I don\'t have to strive or manipulate because He has already gone before me. The right opportunities, the right people and the right doors are being aligned according to His will.',
+    verse: '"In all your ways acknowledge Him and He will direct your paths."',
+    ref: 'Proverbs 3:6'
+  },
+  // Tuesday (2)
+  {
+    affirmation: 'Today I choose to operate with wisdom, not emotion. Every decision I make will be guided by the Holy Spirit, and I trust God to give me clarity where I need it most.',
+    verse: '"If any of you lacks wisdom, let him ask of God…and it will be given to him."',
+    ref: 'James 1:5'
+  },
+  // Wednesday (3)
+  {
+    affirmation: 'Today I affirm that the work of my hands is blessed. This business exists to serve people well, honor God, and create lasting impact. As I remain faithful, God brings the increase.',
+    verse: '"Commit your work to the Lord, and your plans will be established."',
+    ref: 'Proverbs 16:3'
+  },
+  // Thursday (4)
+  {
+    affirmation: 'Today I declare that fear has no place in my business. I will not shrink back from opportunities, difficult conversations, or bold obedience. God has equipped me for everything He has called me to do.',
+    verse: '"For God gave us a spirit not of fear, but of power and love and self-control."',
+    ref: '2 Timothy 1:7'
+  },
+  // Friday (5)
+  {
+    affirmation: 'Today I declare that I will remain faithful in the small things. Excellence, integrity, and consistency are my competitive advantage because I ultimately work for the Lord.',
+    verse: '"Whatever you do, work heartily, as for the Lord and not for men."',
+    ref: 'Colossians 3:23'
+  },
+  // Saturday (6)
+  {
+    affirmation: 'Today I remember that my provision comes from God, not the market. He is my source, and no economy, algorithm, or circumstance can limit what He wants to do if I remain obedient.',
+    verse: '"And my God will supply every need of yours according to his riches in glory in Christ Jesus."',
+    ref: 'Philippians 4:19'
+  }
+];
+function getDailyDevotional(d){
+  return DAILY_DEVOTIONAL[d] || DAILY_DEVOTIONAL[0];
+}
+// Keep weeklyQuote for any legacy references — now returns the day's affirmation text
 function weeklyQuote(){
-  const items=D.aspirationalVision||[];
-  const active=items.filter(function(v){return !v.done&&typeof v==='object';});
-  const pool=active.length?active:items;
-  if(!pool.length)return'';
-  const p=AP();const cw=getCW();
-  // Deterministic pick based on week number so it stays consistent all week
-  const idx=(cw-1)%pool.length;
-  const item=pool[idx];
-  return typeof item==='string'?item:(item.text||'');
+  return '';  // replaced by daily devotional banner in rToday
 }
 
 // ── ONE THING ─────────────────────────────────────────────────
@@ -536,7 +583,6 @@ function rToday(){
   const intention=p.intentions[w]||'';
   const oneThing=getOneThing();
   const streak=calcStreak();
-  const quote=weeklyQuote();
   const accomplishments=getDayAccomplishments(w,d);
 
   let advNudge='';
@@ -579,14 +625,23 @@ function rToday(){
   let tlHtml=schedItems.map(function(i){return i.html;}).join('');
   if(!tlHtml)tlHtml='<div style="color:var(--t3);font-size:12px;padding:.5rem 0">No blocks or events today — go to This Week → Daily Planner to plan your day.</div>';
 
+  const dev=getDailyDevotional(d);
+
   document.getElementById('page-today').innerHTML=
     advNudge
 
-    // Quote of the week banner
-    +(quote?'<div style="background:linear-gradient(135deg,#1D9E75,#0F6E56);color:#fff;border-radius:var(--r);padding:.875rem 1.25rem;margin-bottom:1.25rem;font-size:13px;line-height:1.6">'
-      +'<div style="font-size:10px;font-weight:700;letter-spacing:.07em;opacity:.7;margin-bottom:4px">VISION OF THE WEEK</div>'
-      +'<div style="font-style:italic;font-size:14px">"'+quote+'"</div>'
-    +'</div>':'')
+    // Daily devotional banner
+    +'<div style="background:linear-gradient(135deg,#1a3a5c,#2D5F8A);color:#fff;border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:1.25rem;line-height:1.65">'
+      +'<div style="font-size:10px;font-weight:700;letter-spacing:.08em;opacity:.65;margin-bottom:6px;text-transform:uppercase">'+DAYS[d]+' Affirmation</div>'
+      +'<div style="font-size:13px;margin-bottom:10px;opacity:.95">'+dev.affirmation+'</div>'
+      +'<div style="border-top:1px solid rgba(255,255,255,.2);padding-top:8px;display:flex;align-items:flex-start;gap:8px">'
+        +'<span style="font-size:16px;flex-shrink:0;margin-top:1px">✝</span>'
+        +'<div>'
+          +'<div style="font-size:13px;font-style:italic;opacity:.9">'+dev.verse+'</div>'
+          +'<div style="font-size:11px;font-weight:600;opacity:.7;margin-top:3px;letter-spacing:.03em">'+dev.ref+'</div>'
+        +'</div>'
+      +'</div>'
+    +'</div>'
 
     // Header row with streak
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">'
@@ -809,7 +864,7 @@ function rWeekTacs(){
     const goalName=p.goals[t.gi]||'';
     html+='<div class="tr" draggable="true" ondragstart="onTacStart(event,&quot;'+t.id+'&quot;)">'
       +'<span class="dh" style="cursor:grab;font-size:12px">⠿</span>'
-      +'<div class="chk '+(dk?'on':'')+' twk-chk" data-tid="'+t.id+'" data-w="'+w+'"></div>'
+      +'<div class="chk '+(dk?'on':'')+' twk-chk" data-tid="'+t.id+'" data-w="'+w+'" onclick="togTWeek(this,\''+t.id+'\','+w+')"></div>'
       +'<div class="tt '+(dk?'done':'')+'" style="flex:1">'
         +t.text
         +(t.time?'<span style="font-size:11px;color:var(--t3);margin-left:6px">'+t.time+'</span>':'')
@@ -1245,7 +1300,7 @@ function rReview(){
   const rev=p.reviews[pw]||{q1:'',q2:'',q3:''};
   const cc=psc>=85?'great':psc>=60?'ok':'low';
   const phrase=psc>=85?`🎉 Outstanding! Keep that momentum into ${periodWeekLabel(p,cw)}!`:psc>=60?`👍 Solid week. Push a little harder this week. ${randEnc()}`:` 💪 Every week is a new start. ${randEnc()}`;
-  const inc=p.tactics.filter(t=>t.rec==='onetime'&&(t.dueWeek===pw||t.carriedTo===pw)&&!tacDoneInWeek(p,t.id,pw));
+  const inc=p.tactics.filter(t=>{if(t.rec!=='onetime')return false;const eff=t.carriedTo!==undefined&&t.carriedTo!==t.dueWeek?t.carriedTo:t.dueWeek;return eff===pw&&!tacDoneInWeek(p,t.id,pw);});
   const wc=periodWeekCount(p);
 
   document.getElementById('page-review').innerHTML=`
@@ -1286,7 +1341,7 @@ function rReview(){
 }
 function selWRev(n){setCW(n);rReview();}
 function saveRev(w){const p=AP();const q1=document.getElementById('rq1').value;const q2=document.getElementById('rq2').value;const q3=document.getElementById('rq3').value;p.reviews[w]={q1,q2,q3};sv();toast('Review saved ✓');celebrate('✓ Review complete! '+randEnc());}
-function carryFwd(fw){const p=AP();const cw=getCW();const inc=p.tactics.filter(t=>t.rec==='onetime'&&(t.dueWeek===fw||t.carriedTo===fw)&&!tacDoneInWeek(p,t.id,fw));inc.forEach(t=>{t.carriedTo=cw;});sv();toast(`${inc.length} tactic${inc.length>1?'s':''} carried ✓`);rReview();}
+function carryFwd(fw){const p=AP();const cw=getCW();const inc=p.tactics.filter(t=>{if(t.rec!=='onetime')return false;const eff=t.carriedTo!==undefined&&t.carriedTo!==t.dueWeek?t.carriedTo:t.dueWeek;return eff===fw&&!tacDoneInWeek(p,t.id,fw);});inc.forEach(t=>{t.carriedTo=cw;});sv();toast(`${inc.length} tactic${inc.length>1?'s':''} carried ✓`);rReview();}
 function rmWin(id){const p=AP();p.wins=p.wins.filter(w=>w.id!==id);sv();rReview();}
 
 // ── BIG PICTURE ──────────────────────────────────────────────
@@ -1615,32 +1670,43 @@ function updateNPName(val){
 }
 function togNPGoal(gi,el){const p=AP();if(!p.goalsDone)p.goalsDone=[];const idx=p.goalsDone.indexOf(gi);if(idx>=0)p.goalsDone.splice(idx,1);else p.goalsDone.push(gi);sv();el.classList.toggle('on',p.goalsDone.includes(gi));const label=el.nextElementSibling;if(label)label.style.cssText=p.goalsDone.includes(gi)?'flex:1;font-size:13px;text-decoration:line-through;color:var(--t3)':'flex:1;font-size:13px';}
 function confirmNewPeriod(){
-  const p=AP();
-  const name=document.getElementById('np-name').value.trim()||seasonName(new Date(dateVal+'T12:00:00'));
-  const dateVal=document.getElementById('np-date').value;
-  const hasPlan=document.getElementById('np-plan').value==='yes';
-  if(!dateVal){toast('Please set a start date.');return;}
-  const startDate=new Date(dateVal+'T12:00:00');
-  // Archive current period (mark as archived)
-  p.archived=true;
-  // Carry forward incomplete goals and their tactics
-  const completedGoals=p.goalsDone||[];
-  const newPeriod=createPeriod(name,startDate,hasPlan);
-  // Goals: carry uncompleted
-  newPeriod.goals=p.goals.filter((_,i)=>!completedGoals.includes(i));
-  // Tactics: carry incomplete one-time tactics for carried goals
-  const carriedGoalOriginalIndices=p.goals.map((_,i)=>i).filter(i=>!completedGoals.includes(i));
-  const newGoalMap={};// old index -> new index
-  let ni=0;carriedGoalOriginalIndices.forEach(oi=>{newGoalMap[oi]=ni++;});
-  p.tactics.forEach(t=>{
-    if(!carriedGoalOriginalIndices.includes(t.gi))return;// goal was completed
-    if(t.rec!=='onetime')return;// only carry one-time incomplete
-    const done=Object.keys(p.wc).some(k=>k.startsWith(t.id+'_')&&p.wc[k]);
-    if(done)return;// already done
-    newPeriod.tactics.push({...t,id:'tac-'+Date.now()+Math.random(),gi:newGoalMap[t.gi],carriedTo:hasPlan?1:1,dueWeek:hasPlan?1:1});
-  });
-  D.periods.push(newPeriod);D.activePeriodId=newPeriod.id;sv();
-  closeModal();rToday();toast(`${name} started! 🎉`);celebrate('🚀 New period started! '+randEnc());
+  try {
+    const p=AP();
+    const dateVal=document.getElementById('np-date').value;
+    if(!dateVal){toast('Please set a start date.');return;}
+    const name=document.getElementById('np-name').value.trim()||seasonName(new Date(dateVal+'T12:00:00'));
+    const hasPlan=document.getElementById('np-plan').value==='yes';
+    const startDate=new Date(dateVal+'T12:00:00');
+    // Archive current period (mark as archived)
+    p.archived=true;
+    // Carry forward incomplete goals and their tactics
+    const completedGoals=p.goalsDone||[];
+    const newPeriod=createPeriod(name,startDate,hasPlan);
+    // Goals: carry uncompleted
+    newPeriod.goals=p.goals.filter((_,i)=>!completedGoals.includes(i));
+    // Also carry aspirational/3yr vision items
+    if(D.aspirationalVision)newPeriod.aspirationalVision=D.aspirationalVision;
+    // Tactics: carry incomplete one-time tactics for carried goals
+    const carriedGoalOriginalIndices=p.goals.map((_,i)=>i).filter(i=>!completedGoals.includes(i));
+    const newGoalMap={};// old index -> new index
+    let ni=0;carriedGoalOriginalIndices.forEach(oi=>{newGoalMap[oi]=ni++;});
+    p.tactics.forEach(t=>{
+      if(!carriedGoalOriginalIndices.includes(t.gi))return;// goal was completed
+      if(t.rec!=='onetime')return;// only carry one-time incomplete
+      const done=Object.keys(p.wc).some(k=>k.startsWith(t.id+'_')&&p.wc[k]);
+      if(done)return;// already done
+      newPeriod.tactics.push({...t,id:'tac-'+Date.now()+'-'+Math.floor(Math.random()*10000),gi:newGoalMap[t.gi],carriedTo:undefined,dueWeek:hasPlan?0:1});
+    });
+    D.periods.push(newPeriod);
+    D.activePeriodId=newPeriod.id;
+    sv();
+    closeModal();
+    // Small delay before re-rendering to let Drive save settle
+    setTimeout(function(){rToday();toast(name+' started! 🎉');celebrate('🚀 New period started! '+randEnc());},150);
+  } catch(err) {
+    console.error('Error starting new period:', err);
+    toast('Something went wrong — please try again.');
+  }
 }
 
 // ── ARCHIVES ─────────────────────────────────────────────────
@@ -2136,8 +2202,6 @@ async function loadFromDrive() {
       if(localBrainDump.length > (D.brainDump||'').length) {
         D.brainDump = localBrainDump;
       }
-      CW = D.curWeek && D.curWeek[AP()?.id] !== undefined ? D.curWeek[AP().id] : nowPeriodWeek(AP());
-      CD = D.curDay && D.curDay[AP()?.id] !== undefined ? D.curDay[AP().id] : new Date().getDay();
       sv(); // sync back to localStorage
       rToday(); // re-render
       setSyncStatus('synced', '● Synced');
@@ -2466,11 +2530,13 @@ function openWeeklyWizard() {
   const w = getCW();
   const wlabel = periodWeekLabel(p, w);
   const dueTacs = p.tactics.filter(function(t) {
-    return (t.rec === 'onetime' && (t.dueWeek === w || t.carriedTo === w)) ||
-           t.rec === 'weekly' || t.rec === 'daily' || t.rec === 'ongoing';
+    if(t.rec==='onetime'){const eff=t.carriedTo!==undefined&&t.carriedTo!==t.dueWeek?t.carriedTo:t.dueWeek;return eff===w;}
+    return t.rec==='weekly'||t.rec==='daily'||t.rec==='ongoing';
   });
   const overdue = p.tactics.filter(function(t) {
-    return t.rec === 'onetime' && t.dueWeek && t.dueWeek < w && !tacDoneInWeek(p, t.id, w-1);
+    if(t.rec!=='onetime'||!t.dueWeek)return false;
+    const eff=t.carriedTo!==undefined&&t.carriedTo!==t.dueWeek?t.carriedTo:t.dueWeek;
+    return eff<w&&!tacDoneInWeek(p,t.id,eff);
   });
   // Get this week's cal events
   const calEventsThisWeek = D.calEvents && D.calEvents[w] ? D.calEvents[w] : {};
