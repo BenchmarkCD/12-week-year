@@ -519,22 +519,19 @@ function renderDailyDevotional(d) {
   el.style.background = pal.bg;
   el.style.border = '1px solid ' + pal.border;
   el.innerHTML =
-    '<div style="display:flex;align-items:flex-start;gap:12px">'
-      + '<span style="font-size:22px;flex-shrink:0;line-height:1.2">✝</span>'
-      + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:' + pal.label + ';text-transform:uppercase;margin-bottom:5px">'
-              + DAYS[d] + ' — Daily Affirmation'
-          + '</div>'
-          + '<div style="font-size:13px;color:#1a1a1a;line-height:1.65;margin-bottom:8px">'
-              + dev.affirmation
-          + '</div>'
-          + '<div style="font-size:12px;font-style:italic;color:' + pal.accent + ';line-height:1.5">'
-              + dev.verse
-          + '</div>'
-          + '<div style="font-size:11px;font-weight:600;color:' + pal.label + ';margin-top:3px;letter-spacing:.03em">'
-              + dev.ref
-          + '</div>'
-      + '</div>'
+    '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:' + pal.label + ';text-transform:uppercase;margin-bottom:5px">'
+            + DAYS[d] + ' — Daily Affirmation'
+        + '</div>'
+        + '<div style="font-size:13px;color:#1a1a1a;line-height:1.65;margin-bottom:8px">'
+            + dev.affirmation
+        + '</div>'
+        + '<div style="font-size:12px;font-style:italic;color:' + pal.accent + ';line-height:1.5">'
+            + dev.verse
+        + '</div>'
+        + '<div style="font-size:11px;font-weight:600;color:' + pal.label + ';margin-top:3px;letter-spacing:.03em">'
+            + dev.ref
+        + '</div>'
     + '</div>';
 }
 
@@ -606,9 +603,13 @@ function rToday(){
   const p=AP();
   const realW=nowPeriodWeek(p);
   const realD=new Date().getDay();
-  // Always auto-advance to real date on Today tab
-  if(D.curWeek[p.id]===undefined||D.curWeek[p.id]===null||realW!==getCW()){setCW(realW);}
-  setCD(realD); // Today tab always shows the actual current day
+  // Auto-advance week if needed, but only reset the day if no explicit day has been set
+  if(D.curWeek[p.id]===undefined||D.curWeek[p.id]===null||realW!==getCW()){
+    setCW(realW);
+    setCD(realD); // also reset day when week changes
+  } else if(D.curDay[p.id]===undefined||D.curDay[p.id]===null){
+    setCD(realD); // first load only
+  }
   const w=getCW();const d=getCD();
   const blocks=getDayBlocks(w,d);
   const dayTacs=tacsForDay(p,w,d);
@@ -716,7 +717,7 @@ function rToday(){
           +'<button class="btn" style="float:right;font-size:11px;padding:2px 8px;margin-top:-2px" id="log-win-btn" onclick="logWin()">🏆 Log a win</button>'
         +'</p>'
         +'<div class="card" style="padding:.75rem 1rem">'
-          +(topTodos.length?topTodos.map(function(t){return'<div class="tr"><div class="chk ctd-chk" data-id="'+t.id+'" onclick="handleCTD(this)"></div><div class="tt" style="flex:1">'+t.text+'</div><span class="pri-pill '+priLabel(parseInt(t.pri||3))+'">'+priLabel(parseInt(t.pri||3))+'</span></div>';}).join(''):'<div class="empty">Nothing pending ✓</div>')
+          +(topTodos.length?topTodos.map(function(t){return'<div class="tr"><div class="chk ctd-chk" data-id="'+t.id+'" onclick="handleCTD(this)"></div><div class="tt" style="flex:1">'+t.text+'</div><span class="pri-pill '+priClass(parseInt(t.pri||3))+'">'+priLabel(parseInt(t.pri||3))+'</span></div>';}).join(''):'<div class="empty">Nothing pending ✓</div>')
           +(pending.length>5?'<div style="font-size:12px;color:var(--t3);padding-top:8px">+'+(pending.length-5)+' more in To-Dos</div>':'')
         +'</div>'
 
@@ -1030,7 +1031,7 @@ function rDayPlan(){
         </div>
         <p class="lbl" style="margin-top:1rem">To-Dos — drag onto blocks →<span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)"> stays on list until checked off</span></p>
         <div class="card" style="padding:.75rem 1rem;max-height:220px;overflow-y:auto">
-          ${activeTodos().length?sortTodos(activeTodos()).map(t=>`<div class="drag-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')"><span class="dh">⠿</span><div style="flex:1;min-width:0;word-break:break-word">${t.text}</div><span class="pri-pill ${priLabel(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span></div>`).join(''):'<div class="empty">No pending to-dos.</div>'}
+          ${activeTodos().length?sortTodos(activeTodos()).map(t=>`<div class="drag-item" draggable="true" data-id="${t.id}" ondragstart="onTDStart(event,'${t.id}')"><span class="dh">⠿</span><div style="flex:1;min-width:0;word-break:break-word">${t.text}</div><span class="pri-pill ${priClass(parseInt(t.pri||3))}">${priLabel(parseInt(t.pri||3))}</span></div>`).join(''):'<div class="empty">No pending to-dos.</div>'}
         </div>
         ${(function(){
           const evs=D.calEvents&&D.calEvents[w]&&D.calEvents[w][d]?D.calEvents[w][d]:[];
@@ -1675,7 +1676,7 @@ function openNewPeriodModal(){
         <div class="mt">Start New 13-Week Period</div>
         <div class="ms">Review your goals below. Check off goals you've completed — they won't carry forward. Uncompleted goals and their tactics carry forward automatically.</div>
         <label class="flbl">New period name</label>
-        <input class="minp" type="text" id="np-name" value="${seasonName(new Date(document.getElementById('np-date')?.value||Date.now()))}">
+        <input class="minp" type="text" id="np-name" value="${seasonName(newStart)}">
         <label class="flbl">Week 1 start date</label>
         <input class="minp" type="date" id="np-date" value="${fmt(newStart)}" onchange="updateNPName(this.value)">
         <label class="flbl">Planning week before Week 1?</label>
@@ -1707,8 +1708,6 @@ function confirmNewPeriod(){
     const newPeriod=createPeriod(name,startDate,hasPlan);
     // Goals: carry uncompleted
     newPeriod.goals=p.goals.filter((_,i)=>!completedGoals.includes(i));
-    // Also carry aspirational/3yr vision items
-    if(D.aspirationalVision)newPeriod.aspirationalVision=D.aspirationalVision;
     // Tactics: carry incomplete one-time tactics for carried goals
     const carriedGoalOriginalIndices=p.goals.map((_,i)=>i).filter(i=>!completedGoals.includes(i));
     const newGoalMap={};// old index -> new index
@@ -1905,7 +1904,7 @@ function confirmBrainDumpSort(){
 }
 
 function rArchives(){
-  const archived=D.periods.filter(p=>p.archived||p.id!==D.activePeriodId);
+  const archived=D.periods.filter(p=>p.archived&&p.id!==D.activePeriodId);
   document.getElementById('page-archives').innerHTML=`
     <div style="font-size:15px;font-weight:700;margin-bottom:.25rem">Archives</div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:1.25rem">Past 13-week periods. Read-only.</div>
@@ -1936,7 +1935,8 @@ function importBackup(e){const file=e.target.files[0];if(!file)return;const read
 // ── MODAL ────────────────────────────────────────────────────
 
 function openMeetingMode(){
-  const p=AP();const cw=getCW();const pw=Math.max(1,cw-1);
+  const p=AP();const cw=getCW();const pw=cw>0?cw-1:0;
+  if(pw===cw&&cw===0){toast('Complete at least one week before using Meeting Mode.');return;}
   const psc=weekScore(p,pw);
   const cc=psc>=85?'var(--green)':psc>=60?'var(--amber)':'var(--red)';
   const rev=p.reviews[pw]||{q1:'',q2:'',q3:'',q4:''};
