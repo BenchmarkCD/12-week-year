@@ -224,7 +224,9 @@ body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:#f
   <button onclick="toggleCalPanel()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--gd);padding:0 4px">📅 Calendars</button>
   <button onclick="signOut()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--t3);padding:0 4px;margin-left:auto">Sign out</button>
 </div>
-<div class="qc" style="margin-top:.5rem">
+<div id="daily-devotional-banner" style="border-radius:var(--r);padding:.875rem 1.25rem;margin-bottom:.75rem;margin-top:.5rem;line-height:1.65"></div>
+
+<div class="qc">
   <span style="font-size:16px">⚡</span>
   <input type="text" id="qc-inp" placeholder="Quick capture — type anything, hit Enter to save to To-Dos…" onkeydown="if(event.key==='Enter')quickCapture()">
   <select id="qc-pri" style="padding:4px 8px;font-size:12px;border-radius:6px;border:1px solid var(--bdr);background:#fff"><option value="1">P1 — Most important</option><option value="2">P2</option><option value="3" selected>P3</option><option value="4">P4</option><option value="5">P5 — Least important</option></select>
@@ -497,9 +499,43 @@ const DAILY_DEVOTIONAL = [
 function getDailyDevotional(d){
   return DAILY_DEVOTIONAL[d] || DAILY_DEVOTIONAL[0];
 }
-// Keep weeklyQuote for any legacy references — now returns the day's affirmation text
-function weeklyQuote(){
-  return '';  // replaced by daily devotional banner in rToday
+
+// Pastel background + accent per day of week
+const DAY_PALETTE = [
+  {bg:'#EEF4FB', border:'#BDD0ED', accent:'#4A7FC1', label:'#2E5F9A'}, // Sunday — soft blue
+  {bg:'#EDF7F2', border:'#B5DECA', accent:'#2E8B57', label:'#1D6640'}, // Monday — sage green
+  {bg:'#F5F0FB', border:'#D5C3EE', accent:'#7B5EA7', label:'#5B3D8A'}, // Tuesday — lavender
+  {bg:'#FEF8EC', border:'#F5DDAA', accent:'#C98A1A', label:'#8A5D00'}, // Wednesday — warm gold
+  {bg:'#FDF0EE', border:'#F2C4BC', accent:'#C0614F', label:'#8C3426'}, // Thursday — dusty rose
+  {bg:'#EDF5FB', border:'#B8D8EE', accent:'#3A7FB5', label:'#1F5E8A'}, // Friday — sky blue
+  {bg:'#F0F9F4', border:'#B9DFCA', accent:'#3A9168', label:'#1E6446'}, // Saturday — mint
+];
+
+function renderDailyDevotional(d) {
+  const el = document.getElementById('daily-devotional-banner');
+  if (!el) return;
+  const dev = getDailyDevotional(d);
+  const pal = DAY_PALETTE[d] || DAY_PALETTE[0];
+  el.style.background = pal.bg;
+  el.style.border = '1px solid ' + pal.border;
+  el.innerHTML =
+    '<div style="display:flex;align-items:flex-start;gap:12px">'
+      + '<span style="font-size:22px;flex-shrink:0;line-height:1.2">✝</span>'
+      + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:' + pal.label + ';text-transform:uppercase;margin-bottom:5px">'
+              + DAYS[d] + ' — Daily Affirmation'
+          + '</div>'
+          + '<div style="font-size:13px;color:#1a1a1a;line-height:1.65;margin-bottom:8px">'
+              + dev.affirmation
+          + '</div>'
+          + '<div style="font-size:12px;font-style:italic;color:' + pal.accent + ';line-height:1.5">'
+              + dev.verse
+          + '</div>'
+          + '<div style="font-size:11px;font-weight:600;color:' + pal.label + ';margin-top:3px;letter-spacing:.03em">'
+              + dev.ref
+          + '</div>'
+      + '</div>'
+    + '</div>';
 }
 
 // ── ONE THING ─────────────────────────────────────────────────
@@ -625,23 +661,10 @@ function rToday(){
   let tlHtml=schedItems.map(function(i){return i.html;}).join('');
   if(!tlHtml)tlHtml='<div style="color:var(--t3);font-size:12px;padding:.5rem 0">No blocks or events today — go to This Week → Daily Planner to plan your day.</div>';
 
-  const dev=getDailyDevotional(d);
+  renderDailyDevotional(d);
 
   document.getElementById('page-today').innerHTML=
     advNudge
-
-    // Daily devotional banner
-    +'<div style="background:linear-gradient(135deg,#1a3a5c,#2D5F8A);color:#fff;border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:1.25rem;line-height:1.65">'
-      +'<div style="font-size:10px;font-weight:700;letter-spacing:.08em;opacity:.65;margin-bottom:6px;text-transform:uppercase">'+DAYS[d]+' Affirmation</div>'
-      +'<div style="font-size:13px;margin-bottom:10px;opacity:.95">'+dev.affirmation+'</div>'
-      +'<div style="border-top:1px solid rgba(255,255,255,.2);padding-top:8px;display:flex;align-items:flex-start;gap:8px">'
-        +'<span style="font-size:16px;flex-shrink:0;margin-top:1px">✝</span>'
-        +'<div>'
-          +'<div style="font-size:13px;font-style:italic;opacity:.9">'+dev.verse+'</div>'
-          +'<div style="font-size:11px;font-weight:600;opacity:.7;margin-top:3px;letter-spacing:.03em">'+dev.ref+'</div>'
-        +'</div>'
-      +'</div>'
-    +'</div>'
 
     // Header row with streak
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">'
@@ -1951,6 +1974,7 @@ function openMeetingMode(){
 function closeModal(event){if(event&&event.target!==event.currentTarget)return;document.getElementById('modal-ct').innerHTML='';window._et=null;}
 
 // Init
+renderDailyDevotional(new Date().getDay());
 rToday();
 
 // ═══════════════════════════════════════════════════════════════
