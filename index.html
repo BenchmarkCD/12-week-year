@@ -287,16 +287,20 @@ function periodWeekLabel(p,w){
   else{if(w===13)return'Rest & Refresh';return`Week ${w}`;}
 }
 function periodWeekStart(p,w){
-  // Reconstruct from stored timestamp, anchored to local noon to prevent
-  // UTC midnight shifting to previous day in US timezones
+  // p.startDate is stored as a UTC ms timestamp (from .setHours(0,0,0,0) or similar).
+  // Reconstruct using UTC date components to avoid timezone day-shift, then
+  // build a LOCAL date at noon so all downstream date math stays in local time.
   const base=new Date(p.startDate);
-  const localBase=new Date(base.getFullYear(),base.getMonth(),base.getDate(),12,0,0);
+  const localBase=new Date(base.getUTCFullYear(),base.getUTCMonth(),base.getUTCDate(),12,0,0);
   const d=new Date(localBase);d.setDate(d.getDate()+w*7);return d;
 }
 function nowPeriodWeek(p){
-  const today=new Date();today.setHours(0,0,0,0);
+  const now=new Date();
+  // Use local date for today, UTC date components for base (matches periodWeekStart)
+  const todayLocal=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const base=new Date(p.startDate);
-  const diff=Math.floor((today-base)/(7*24*3600*1000));
+  const baseLocal=new Date(base.getUTCFullYear(),base.getUTCMonth(),base.getUTCDate());
+  const diff=Math.floor((todayLocal-baseLocal)/(7*24*3600*1000));
   const max=periodWeekCount(p)-1;
   return Math.max(0,Math.min(max,diff));
 }
@@ -310,7 +314,10 @@ function ld(){
   return{activePeriodId:firstPeriod.id,periods:[firstPeriod],todos:[],someday:[],templates:[],brainDump:'',oneThings:{},streakCache:{}};
 }
 function createPeriod(name,startDate,hasPlanWeek){
-  return{id:'p-'+Date.now(),name,startDate:new Date(startDate).setHours(0,0,0,0),hasPlanWeek,goals:[...DEFAULT_GOALS],tactics:[],wc:{},blocks:{},reviews:{},intentions:{},wins:[],goalsDone:[]};
+  // Store startDate as UTC midnight using UTC methods to avoid timezone day shift
+  const d=new Date(startDate);
+  const utcMs=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());
+  return{id:'p-'+Date.now(),name,startDate:utcMs,hasPlanWeek,goals:[...DEFAULT_GOALS],tactics:[],wc:{},blocks:{},reviews:{},intentions:{},wins:[],goalsDone:[]};
 }
 function sv(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(e){}}
 let D=ld();
@@ -431,6 +438,8 @@ function showPage(p,btn){
   document.querySelectorAll('.nb').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(btn)btn.classList.add('active');
+  // Reset review week view when leaving review tab
+  if(p!=='review')rWeekView=null;
   ({today:rToday,todos:rTodos,week:rWeek,review:rReview,bigpicture:rBigPicture,masterplan:rMasterPlan,archives:rArchives,braindump:rBrainDump,habits:rHabits})[p]();
 }
 
@@ -580,7 +589,6 @@ function getHabitData(){
 }
 
 // ── ENHANCED CELEBRATE ────────────────────────────────────────
-const _origCelebrate=celebrate;
 function celebrateWeekScore(score,w){
   if(score>=100){
     bigCelebrate('💯 Perfect week! '+randEnc());
@@ -684,8 +692,8 @@ function rToday(){
     // ONE THING
     +'<div class="one-thing-box">'
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--gd);margin-bottom:6px">🎯 THE ONE THING TODAY</div>'
-      +'<input class="one-thing-input" type="text" id="one-thing-inp" value="'+oneThing+'" placeholder="What is the single most important thing today?" onchange="saveOneThing(this.value)" onblur="saveOneThing(this.value)">'
-      +(oneThing?'<div style="margin-top:8px"><button class="btn" style="font-size:11px;background:var(--green);color:#fff;border-color:var(--gd)" onclick="completeOneThing()">✓ Mark done</button></div>':'')
+      +'<input class="one-thing-input" type="text" id="one-thing-inp" value="'+oneThing+'" placeholder="What is the single most important thing today?" oninput="saveOneThing(this.value);updOneThingBtn(this.value)" onchange="saveOneThing(this.value);updOneThingBtn(this.value)">'
+      +'<div id="one-thing-btn-wrap" style="margin-top:8px">'+(oneThing?'<button class="btn" style="font-size:11px;background:var(--green);color:#fff;border-color:var(--gd)" onclick="completeOneThing()">✓ Mark done</button>':'')+'</div>'
     +'</div>'
 
     // Stats row
@@ -756,9 +764,23 @@ function completeOneThing(){
 }
 function handleCTD(el){completeTodayTodo(el.dataset.id,el);}
 function handleTDayChk(el){togTDay(el,el.dataset.tid,parseInt(el.dataset.w),parseInt(el.dataset.d));}
+function updOneThingBtn(val){
+  const wrap=document.getElementById('one-thing-btn-wrap');
+  if(!wrap)return;
+  wrap.innerHTML=val.trim()?'<button class="btn" style="font-size:11px;background:var(--green);color:#fff;border-color:var(--gd)" onclick="completeOneThing()">✓ Mark done</button>':'';
+}
 function setTodayDay(d){setCD(d);rToday();}
 function goRealWeek(){const p=AP();const rw=nowPeriodWeek(p);const rd=new Date().getDay();setCW(rw);setCD(rd);rToday();}
-function togTDay(el,tid,w,d){const p=AP();const now=!isChk(p,tid,w,d);setChk(p,tid,w,d,now);el.classList.toggle('on',now);const tt=el.nextElementSibling;if(tt)tt.classList.toggle('done',now);if(now)celebrate('✓ Done! '+randEnc());}
+function togTDay(el,tid,w,d){
+  const p=AP();const now=!isChk(p,tid,w,d);setChk(p,tid,w,d,now);
+  el.classList.toggle('on',now);
+  const tt=el.nextElementSibling;if(tt)tt.classList.toggle('done',now);
+  // Update week score stat card in place without full re-render
+  const scoreCards=document.querySelectorAll('.sc .sv');
+  if(scoreCards.length>=1)scoreCards[0].textContent=weekScore(p,w)+'%';
+  if(scoreCards.length>=2)scoreCards[1].textContent=overallScore(p)+'%';
+  if(now)celebrate('✓ Done! '+randEnc());
+}
 function completeTodayTodo(id,el){
   const t=D.todos.find(x=>x.id===id);if(!t)return;
   if(t.sr)t.sr.forEach(ref=>{const blks=getDayBlocks(ref.w,ref.d);blks.forEach(b=>{if(b.sts)b.sts=b.sts.filter(s=>s!==id);});setDayBlocks(ref.w,ref.d,blks);});
@@ -903,8 +925,6 @@ function rWeekTacs(){
   });
   document.getElementById('wsub').innerHTML='<div class="card" style="padding:.75rem 1rem">'+html+'</div>';
 }
-function togG2(gi){
-document.getElementById('gb2-'+gi)?.classList.toggle('open');document.getElementById('arr2-'+gi)?.classList.toggle('open');}
 function togTWeek(el,tid,w){
   const p=AP();const cur=Array.from({length:7},function(_,d){return isChk(p,tid,w,d);}).some(Boolean);const now=!cur;
   for(let d=0;d<7;d++)setChk(p,tid,w,d,now);
@@ -1320,9 +1340,30 @@ function exportDay(w,d){
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([ics],{type:'text/calendar'}));a.download=`12wy-w${w}-${DAYS[d].toLowerCase()}.ics`;a.click();toast('Exported ✓');
 }
 
+let rWeekView = null; // null = use getCW() — Review tab has its own local week cursor
+function getRW(){ return rWeekView !== null ? rWeekView : getCW(); }
+function selWRev(n){ rWeekView=n; rReview(); }
+
 // ── REVIEW ───────────────────────────────────────────────────
 function rReview(){
-  const p=AP();const cw=getCW();const pw=Math.max(0,cw-1);const psc=weekScore(p,pw);
+  const p=AP();const cw=getCW();
+  // Can't review if on planning week (week 0) — nothing completed yet
+  if(cw===0){
+    document.getElementById('page-review').innerHTML=`
+      <div style="font-size:15px;font-weight:700;margin-bottom:.5rem">Weekly Review<span class="period-badge">${p.name}</span></div>
+      <div class="info">You're in the Planning Week. Complete Week 1 before doing your first review.</div>
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--bdr)">
+        <button class="btn" style="border-color:#9B59B6;color:#9B59B6" onclick="openNewPeriodModal()">🆕 Start new 13-week period</button>
+        <button class="btn" style="margin-left:8px" onclick="openEditPeriodModal()">✏️ Edit period dates</button>
+      </div>`;
+    return;
+  }
+  // rWeekView tracks which week we're VIEWING in review — defaults to current week
+  // Reset to current week each time we navigate to Review tab
+  if(rWeekView===null)rWeekView=cw;
+  const vw=getRW(); // the week currently being viewed
+  const pw=vw>0?vw-1:0; // the week being reviewed (one before viewed)
+  const psc=weekScore(p,pw);
   const rev=p.reviews[pw]||{q1:'',q2:'',q3:''};
   const cc=psc>=85?'great':psc>=60?'ok':'low';
   const phrase=psc>=85?`🎉 Outstanding! Keep that momentum into ${periodWeekLabel(p,cw)}!`:psc>=60?`👍 Solid week. Push a little harder this week. ${randEnc()}`:` 💪 Every week is a new start. ${randEnc()}`;
@@ -1332,7 +1373,7 @@ function rReview(){
   document.getElementById('page-review').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem;flex-wrap:wrap;gap:8px"><div style="font-size:15px;font-weight:700">Weekly Review<button class="btn" style="margin-left:12px;border-color:#9B59B6;color:#9B59B6;font-size:12px;padding:4px 12px" onclick="openMeetingMode()">📋 Meeting Mode</button><span class="period-badge">${p.name}</span></div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:1.25rem">Every Monday — review last week, set intention, prepare for accountability meeting.</div>
-    <div class="ws">${Array.from({length:14},(_,i)=>{if(i===0&&!p.hasPlanWeek)return '';const lbl=i===0&&p.hasPlanWeek?'Plan':i===13?'R&R':String(i);const mw=lbl.length>2?'44px':'36px';return`<button class="wb ${i===cw?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===13?'w13':''}" style="min-width:${mw}" onclick="selWRev(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
+    <div class="ws">${Array.from({length:14},(_,i)=>{if(i===0&&!p.hasPlanWeek)return '';const lbl=i===0&&p.hasPlanWeek?'Plan':i===13?'R&R':String(i);const mw=lbl.length>2?'44px':'36px';return`<button class="wb ${i===vw?'active':weekScore(p,i)>0?'has-p':i===0&&p.hasPlanWeek?'plan':i===13?'w13':''}" style="min-width:${mw}" onclick="selWRev(${i})" title="${periodWeekLabel(p,i)}">${lbl}</button>`;}).join('')}</div>
     <div style="text-align:center;margin-bottom:1.5rem">
       <div style="font-size:13px;color:var(--t2);margin-bottom:.25rem">${periodWeekLabel(p,pw)} score</div>
       <div class="rpct ${cc}">${psc}%</div>
@@ -1344,11 +1385,11 @@ function rReview(){
       ${tacsForWeek(p,pw).map(t=>{const done=tacDoneInWeek(p,t.id,pw);return`<div class="tr" style="padding:5px 0"><div class="chk ${done?'on':''}" style="pointer-events:none;flex-shrink:0"></div><div class="tt ${done?'done':''}" style="flex:1;font-size:12px">${t.text}</div>${t.dueWeek?`<span class="db">W${t.dueWeek}</span>`:''}</div>`;}).join('')||'<div class="empty">No tactics this week.</div>'}
     </div>
     <div class="rq">What didn't get done, and why?</div>
-    <textarea class="rta" id="rq1" placeholder="Be honest but kind to yourself…">${rev.q1}</textarea>
-    <div class="rq">Top 3 priorities for ${periodWeekLabel(p,cw)}?</div>
-    <textarea class="rta" id="rq2" placeholder="1.\n2.\n3.">${rev.q2}</textarea>
+    <textarea class="rta" id="rq1" placeholder="Be honest but kind to yourself…"></textarea>
+    <div class="rq">Top 3 priorities for ${periodWeekLabel(p,vw)}?</div>
+    <textarea class="rta" id="rq2" placeholder="1.\n2.\n3."></textarea>
     <div class="rq">What do I need to protect or say no to this week?</div>
-    <textarea class="rta" id="rq3" placeholder="What could derail me?">${rev.q3}</textarea>
+    <textarea class="rta" id="rq3" placeholder="What could derail me?"></textarea>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem">
       <button class="btn green" onclick="saveRev(${pw})">Save review</button>
       <button class="btn" onclick="logWin()">🏆 Log a win</button>
@@ -1364,8 +1405,13 @@ function rReview(){
       <button class="btn" style="border-color:#9B59B6;color:#9B59B6" onclick="openNewPeriodModal()">🆕 Start new 13-week period</button>
       <button class="btn" style="margin-left:8px" onclick="openEditPeriodModal()">✏️ Edit period dates</button>
     </div>`;
+  // Set textarea values safely via .value — never inject user text into innerHTML
+  const rq1el=document.getElementById('rq1');if(rq1el)rq1el.value=rev.q1||'';
+  const rq2el=document.getElementById('rq2');if(rq2el)rq2el.value=rev.q2||'';
+  const rq3el=document.getElementById('rq3');if(rq3el)rq3el.value=rev.q3||'';
 }
-function selWRev(n){setCW(n);rReview();}
+// Review tab has its own local week cursor — separate from the app's active week
+// so browsing old scores doesn't corrupt Today/This Week/everywhere else
 function saveRev(w){const p=AP();const q1=document.getElementById('rq1').value;const q2=document.getElementById('rq2').value;const q3=document.getElementById('rq3').value;p.reviews[w]={q1,q2,q3};sv();toast('Review saved ✓');celebrate('✓ Review complete! '+randEnc());}
 function carryFwd(fw){const p=AP();const cw=getCW();const inc=p.tactics.filter(t=>{if(t.rec!=='onetime')return false;const eff=t.carriedTo!==undefined&&t.carriedTo!==t.dueWeek?t.carriedTo:t.dueWeek;return eff===fw&&!tacDoneInWeek(p,t.id,fw);});inc.forEach(t=>{t.carriedTo=cw;});sv();toast(`${inc.length} tactic${inc.length>1?'s':''} carried ✓`);rReview();}
 function rmWin(id){const p=AP();p.wins=p.wins.filter(w=>w.id!==id);sv();rReview();}
@@ -1675,15 +1721,21 @@ function saveEditPeriod(){
   const hasPlan=document.getElementById('ep-plan').value==='yes';
   if(!dateVal){toast('Please set a start date.');return;}
   if(name)p.name=name;
-  p.startDate=new Date(dateVal+'T12:00:00').setHours(0,0,0,0);
+  // Store as UTC midnight by parsing date string parts directly
+  // This avoids any timezone conversion that could shift the day
+  const parts=dateVal.split('-');
+  p.startDate=Date.UTC(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
   p.hasPlanWeek=hasPlan;
   sv();closeModal();
-  // Re-migrate period name to season if using auto-name
   toast('Period updated ✓');
   rToday();
 }
+// Temporary goal-done state for new period modal — not saved to live period until confirmed
+let _npGoalsDone = [];
 function openNewPeriodModal(){
   const p=AP();const wc=periodWeekCount(p);
+  // Copy current goalsDone into temp array for the modal
+  _npGoalsDone = (p.goalsDone||[]).slice();
   // New period start = day after last week of current period ends
   const lastWeekStart=periodWeekStart(p,wc-1);const newStart=new Date(lastWeekStart);newStart.setDate(newStart.getDate()+7);
   const fmt=d=>d.toISOString().slice(0,10);
@@ -1699,7 +1751,7 @@ function openNewPeriodModal(){
         <label class="flbl">Planning week before Week 1?</label>
         <select class="minp" id="np-plan" style="margin-top:0"><option value="no">No — Week 1 starts on the date above</option><option value="yes">Yes — add a Planning Week before Week 1</option></select>
         <div style="font-size:12px;font-weight:600;color:var(--t2);margin-top:1rem;margin-bottom:8px">Goals — check off completed ones:</div>
-        ${p.goals.map((g,i)=>{const isDone=(p.goalsDone||[]).includes(i);return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--bdr)"><div class="chk ${isDone?'on':''}" id="npg-${i}" onclick="togNPGoal(${i},this)"></div><div style="flex:1;font-size:13px;${isDone?'text-decoration:line-through;color:var(--t3)':''}">${g}</div></div>`;}).join('')}
+        ${p.goals.map((g,i)=>{const isDone=_npGoalsDone.includes(i);return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--bdr)"><div class="chk ${isDone?'on':''}" id="npg-${i}" onclick="togNPGoal(${i},this)"></div><div style="flex:1;font-size:13px;${isDone?'text-decoration:line-through;color:var(--t3)':''}">${g}</div></div>`;}).join('')}
         <div class="mfooter"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="confirmNewPeriod()">Start new period</button></div>
       </div>
     </div>`;
@@ -1709,7 +1761,13 @@ function updateNPName(val){
   const el=document.getElementById('np-name');
   if(el) el.value=seasonName(new Date(val+'T12:00:00'));
 }
-function togNPGoal(gi,el){const p=AP();if(!p.goalsDone)p.goalsDone=[];const idx=p.goalsDone.indexOf(gi);if(idx>=0)p.goalsDone.splice(idx,1);else p.goalsDone.push(gi);sv();el.classList.toggle('on',p.goalsDone.includes(gi));const label=el.nextElementSibling;if(label)label.style.cssText=p.goalsDone.includes(gi)?'flex:1;font-size:13px;text-decoration:line-through;color:var(--t3)':'flex:1;font-size:13px';}
+function togNPGoal(gi,el){
+  const idx=_npGoalsDone.indexOf(gi);
+  if(idx>=0)_npGoalsDone.splice(idx,1);else _npGoalsDone.push(gi);
+  el.classList.toggle('on',_npGoalsDone.includes(gi));
+  const label=el.nextElementSibling;
+  if(label)label.style.cssText=_npGoalsDone.includes(gi)?'flex:1;font-size:13px;text-decoration:line-through;color:var(--t3)':'flex:1;font-size:13px';
+}
 function confirmNewPeriod(){
   try {
     const p=AP();
@@ -1720,8 +1778,9 @@ function confirmNewPeriod(){
     const startDate=new Date(dateVal+'T12:00:00');
     // Archive current period (mark as archived)
     p.archived=true;
-    // Carry forward incomplete goals and their tactics
-    const completedGoals=p.goalsDone||[];
+    // Apply the modal's goal selections to the current period now (at confirm time, not during interaction)
+    const completedGoals=_npGoalsDone.slice();
+    p.goalsDone=completedGoals;
     const newPeriod=createPeriod(name,startDate,hasPlan);
     // Goals: carry uncompleted
     newPeriod.goals=p.goals.filter((_,i)=>!completedGoals.includes(i));
@@ -1847,9 +1906,12 @@ function rBrainDump(){
         +'<button class="btn" onclick="clearBrainDump()">Clear</button>'
       +'</div>'
     +'</div>'
-    +'<textarea class="brain-dump-area" id="brain-dump-ta" placeholder="Just start writing... What is on your mind? What needs doing? What ideas do you have?" oninput="saveBrainDump()" onblur="saveBrainDump()">'+(D.brainDump||'')+'</textarea>'
+    +'<textarea class="brain-dump-area" id="brain-dump-ta" placeholder="Just start writing... What is on your mind? What needs doing? What ideas do you have?" oninput="saveBrainDump()" onblur="saveBrainDump()"></textarea>'
     +'<div style="font-size:12px;color:var(--t3);margin-top:8px">Auto-saved. Click "Sort into To-Dos" to turn any line into an active to-do.</div>'
     +(D.brainDump?'<div style="font-size:12px;color:var(--t3);margin-top:4px">'+D.brainDump.split(/\n/).filter(function(l){return l.trim();}).length+' lines</div>':'');
+  // Set textarea value via DOM property — never via innerHTML — to handle any special chars safely
+  const ta=document.getElementById('brain-dump-ta');
+  if(ta)ta.value=D.brainDump||'';
 }
 function saveBrainDump(){
   const ta=document.getElementById('brain-dump-ta');
@@ -1926,7 +1988,11 @@ function rArchives(){
     <div style="font-size:15px;font-weight:700;margin-bottom:.25rem">Archives</div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:1.25rem">Past 13-week periods. Read-only.</div>
     ${archived.length?archived.map(p=>{
-      const wc=periodWeekCount(p);const sc=overallScore(p);const sd=new Date(p.startDate);const ed=periodWeekStart(p,wc-1);const edEnd=new Date(ed);edEnd.setDate(edEnd.getDate()+6);
+      const wc=periodWeekCount(p);const sc=overallScore(p);
+      // Use UTC date components to avoid timezone shift on stored UTC midnight timestamp
+      const sdBase=new Date(p.startDate);
+      const sd=new Date(sdBase.getUTCFullYear(),sdBase.getUTCMonth(),sdBase.getUTCDate());
+      const ed=periodWeekStart(p,wc-1);const edEnd=new Date(ed);edEnd.setDate(edEnd.getDate()+6);
       return`<div class="card">
         <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.75rem">
           <div><div style="font-size:15px;font-weight:700">${p.name}</div><div style="font-size:12px;color:var(--t2)">${fd(sd)} – ${fd(edEnd)}${p.hasPlanWeek?' · includes Planning Week':''}</div></div>
@@ -2225,6 +2291,9 @@ async function loadFromDrive() {
         // But keep local data if it has more periods or todos (more recent)
         const driveScore = (driveData.periods||[]).length * 100 + (driveData.todos||[]).length;
         const localScore = (D.periods||[]).length * 100 + (D.todos||[]).length;
+        // Always preserve current week/day selection — don't let Drive reset navigation state
+        const savedCurWeek = D.curWeek;
+        const savedCurDay = D.curDay;
         if (driveScore >= localScore) {
           Object.assign(D, driveData);
         } else {
@@ -2233,6 +2302,9 @@ async function loadFromDrive() {
           if (driveData.selectedCals) D.selectedCals = driveData.selectedCals;
           console.log('Keeping local data (more complete than Drive)');
         }
+        // Restore navigation state so sign-in doesn't reset current week/day
+        if (savedCurWeek && Object.keys(savedCurWeek).length) D.curWeek = savedCurWeek;
+        if (savedCurDay && Object.keys(savedCurDay).length) D.curDay = savedCurDay;
       } else if (!localHasPeriods) {
         // Neither has data — use Drive anyway
         Object.assign(D, driveData);
@@ -2378,29 +2450,39 @@ async function loadCalendars() {
 }
 
 // Pull Google Calendar events into the planner
+// Helper: build RFC3339 timestamp with local timezone offset (required by Google Calendar API)
+function toRFC3339Local(date, endOfDay) {
+  const pad = function(n){return String(n).padStart(2,'0');};
+  const y = date.getFullYear();
+  const mo = pad(date.getMonth()+1);
+  const dd = pad(date.getDate());
+  const time = endOfDay ? 'T23:59:59' : 'T00:00:00';
+  // Get local timezone offset as +HH:MM or -HH:MM
+  const off = -date.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const oh = pad(Math.floor(Math.abs(off)/60));
+  const om = pad(Math.abs(off)%60);
+  return y+'-'+mo+'-'+dd+time+sign+oh+':'+om;
+}
+
 async function syncCalendarsIn() {
   if (!gToken) { console.log('syncCalendarsIn: no token'); return; }
   if (!gapiReady) { console.log('syncCalendarsIn: gapi not ready, retrying...'); setTimeout(syncCalendarsIn, 2000); return; }
   if (!gCalendars.length) { console.log('syncCalendarsIn: no calendars yet, loading...'); await loadCalendars(); return; }
   const p = AP();
-  const wc = 14;
   let imported = 0;
   const selectedIds = D.selectedCals || gCalendars.filter(function(c){return c.selected;}).map(function(c){return c.id;});
-  
+
+  // Clear existing cal events so stale events don't persist after a re-sync
+  D.calEvents = {};
+
   for (let w = 1; w <= 13; w++) {
     const ws = periodWeekStart(p, w);
-    const we = new Date(ws); we.setDate(we.getDate() + 7);
-    // Use local-time ISO strings to avoid UTC offset shifting the query window
-    // (toISOString() converts to UTC which can push midnight back to previous day)
-    function toLocalISO(d) {
-      const pad = function(n){return String(n).padStart(2,'0');};
-      return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T00:00:00';
-    }
-    const tMin = toLocalISO(ws);
-    const tMax = toLocalISO(we);
-    if (!D.calEvents) D.calEvents = {};
-    if (!D.calEvents[w]) D.calEvents[w] = {};
-    
+    const we = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate()+6); // last day of week
+    const tMin = toRFC3339Local(ws, false);
+    const tMax = toRFC3339Local(we, true);
+    D.calEvents[w] = {};
+
     for (const calId of selectedIds) {
       try {
         const res = await gapi.client.calendar.events.list({
@@ -2415,10 +2497,13 @@ async function syncCalendarsIn() {
         events.forEach(function(ev) {
           if (!ev.start) return;
           const isAllDay = !!ev.start.date;
-          const startDt = new Date(ev.start.dateTime || ev.start.date + 'T00:00:00');
-          const dayIdx = startDt.getDay();
+          // Parse date: for all-day use date string directly, for timed events use dateTime
+          const startDt = isAllDay
+            ? new Date(ev.start.date + 'T12:00:00') // noon local to avoid any timezone shift
+            : new Date(ev.start.dateTime);
+          const dayIdx = startDt.getDay(); // 0=Sun ... 6=Sat
           if (!D.calEvents[w][dayIdx]) D.calEvents[w][dayIdx] = [];
-          // Avoid duplicates
+          // Avoid duplicates within this sync pass
           const exists = D.calEvents[w][dayIdx].some(function(e) { return e.id === ev.id; });
           if (!exists) {
             D.calEvents[w][dayIdx].push({
@@ -2435,7 +2520,6 @@ async function syncCalendarsIn() {
         });
       } catch(e) {
         console.warn('Cal sync error for ' + calId, e);
-        // If 404, this calendar doesn't exist in Google Calendar — remove it silently
         if (e && (e.status === 404 || (e.result && e.result.error && e.result.error.code === 404))) {
           console.log('Removing invalid calendar:', calId);
           if (D.selectedCals) D.selectedCals = D.selectedCals.filter(function(id){return id !== calId;});
@@ -2443,7 +2527,7 @@ async function syncCalendarsIn() {
           if (!D._badCalendars) D._badCalendars = [];
           if (!D._badCalendars.includes(calId)) D._badCalendars.push(calId);
           sv();
-          break; // Stop trying other weeks for this calendar
+          break;
         }
       }
     }
