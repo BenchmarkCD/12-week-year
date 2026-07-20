@@ -287,9 +287,11 @@ function periodWeekLabel(p,w){
   else{if(w===13)return'Rest & Refresh';return`Week ${w}`;}
 }
 function periodWeekStart(p,w){
+  // Reconstruct from stored timestamp, anchored to local noon to prevent
+  // UTC midnight shifting to previous day in US timezones
   const base=new Date(p.startDate);
-  const offset=p.hasPlanWeek?w:w; // week 0 = planning = offset 0
-  const d=new Date(base);d.setDate(d.getDate()+offset*7);return d;
+  const localBase=new Date(base.getFullYear(),base.getMonth(),base.getDate(),12,0,0);
+  const d=new Date(localBase);d.setDate(d.getDate()+w*7);return d;
 }
 function nowPeriodWeek(p){
   const today=new Date();today.setHours(0,0,0,0);
@@ -1435,8 +1437,23 @@ function rBigPicture(){
 
 
 function toggleGoalDone(gi){const p=AP();if(!p.goalsDone)p.goalsDone=[];const idx=p.goalsDone.indexOf(gi);if(idx>=0)p.goalsDone.splice(idx,1);else{p.goalsDone.push(gi);celebrate('🎯 Goal complete! '+randEnc());}sv();rBigPicture();}
-function openGoalEditor(){const p=AP();document.getElementById('modal-ct').innerHTML=`<div class="modal-overlay" onclick="closeModal(event)"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="mt">Edit Goals</div><div class="ms">Edit your goals for ${p.name}.</div>${p.goals.map((g,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center"><span style="font-size:11px;font-weight:700;color:var(--t3);width:22px;flex-shrink:0">${i+1}</span><input class="minp" style="margin:0;flex:1" type="text" id="gedit-${i}" value="${g}"></div>`).join('')}<div style="display:flex;gap:8px;margin-top:8px"><button class="btn" onclick="addGoal()">+ Add goal</button></div><div class="mfooter"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="saveGoals()">Save goals</button></div></div></div>`;}
+function openGoalEditor(){const p=AP();document.getElementById('modal-ct').innerHTML=`<div class="modal-overlay" onclick="closeModal(event)"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="mt">Edit Goals</div><div class="ms">Edit or remove goals for ${p.name}. Removing a goal also removes its tactics.</div>${p.goals.map((g,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center"><span style="font-size:11px;font-weight:700;color:var(--t3);width:22px;flex-shrink:0">${i+1}</span><input class="minp" style="margin:0;flex:1" type="text" id="gedit-${i}" value="${g.replace(/"/g,'&quot;')}"><button onclick="removeGoal(${i})" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--t3);padding:0 6px;flex-shrink:0;line-height:1" title="Remove this goal">×</button></div>`).join('')}<div style="display:flex;gap:8px;margin-top:8px"><button class="btn" onclick="addGoal()">+ Add goal</button></div><div class="mfooter"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="saveGoals()">Save goals</button></div></div></div>`;}
 function addGoal(){const p=AP();p.goals.push('New goal');sv();openGoalEditor();}
+function removeGoal(gi){
+  const p=AP();
+  if(!confirm('Remove goal '+(gi+1)+'?\n\nThis will also remove all tactics for this goal.'))return;
+  // Remove all tactics belonging to this goal
+  p.tactics=p.tactics.filter(function(t){return t.gi!==gi;});
+  // Re-index goal indices on remaining tactics
+  p.tactics.forEach(function(t){if(t.gi>gi)t.gi--;});
+  // Re-index goalsDone
+  p.goalsDone=(p.goalsDone||[]).filter(function(i){return i!==gi;}).map(function(i){return i>gi?i-1:i;});
+  // Remove the goal
+  p.goals.splice(gi,1);
+  sv();
+  openGoalEditor();
+  toast('Goal removed ✓');
+}
 function saveGoals(){const p=AP();p.goals=p.goals.map((_,i)=>{const el=document.getElementById('gedit-'+i);return el?el.value.trim()||_:_;}).filter(g=>g);sv();closeModal();rBigPicture();toast('Goals updated ✓');}
 
 // ── MASTER PLAN ──────────────────────────────────────────────
@@ -2373,8 +2390,14 @@ async function syncCalendarsIn() {
   for (let w = 1; w <= 13; w++) {
     const ws = periodWeekStart(p, w);
     const we = new Date(ws); we.setDate(we.getDate() + 7);
-    const tMin = ws.toISOString();
-    const tMax = we.toISOString();
+    // Use local-time ISO strings to avoid UTC offset shifting the query window
+    // (toISOString() converts to UTC which can push midnight back to previous day)
+    function toLocalISO(d) {
+      const pad = function(n){return String(n).padStart(2,'0');};
+      return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T00:00:00';
+    }
+    const tMin = toLocalISO(ws);
+    const tMax = toLocalISO(we);
     if (!D.calEvents) D.calEvents = {};
     if (!D.calEvents[w]) D.calEvents[w] = {};
     
