@@ -2161,17 +2161,22 @@ function initTokenClient() {
 }
 
 function signIn() {
+  // If GAPI isn't ready yet, wait for it
+  if (!gapiReady) {
+    setTimeout(signIn, 500);
+    return;
+  }
+  // If token client not initialized yet, init it and retry
   if (!gTokenClient) {
     if (typeof google !== 'undefined') {
       initTokenClient();
-      setTimeout(signIn, 800);
+      setTimeout(signIn, 500);
     } else {
-      setTimeout(signIn, 800);
+      setTimeout(signIn, 500);
     }
     return;
   }
-  // Use 'select_account' so the Google account picker always shows.
-  // Empty string prompt silently fails when no session exists.
+  // 'select_account' ensures Google account picker always shows — never silently fails
   gTokenClient.requestAccessToken({prompt: 'select_account'});
 }
 
@@ -2757,19 +2762,16 @@ function saveWeekNote(w, val) {
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('load', function() {
-  // Wait for GAPI to be ready
   function waitForGapi() {
     if (typeof gapi !== 'undefined') {
-      initGoogleApis();
+      initGoogleApis(); // this calls tryAutoSignIn -> initTokenClient internally
     } else {
       setTimeout(waitForGapi, 200);
     }
   }
   waitForGapi();
-  initTokenClient();
   requestNotifications();
   scheduleWeeklyNotifications();
-  // Request notification permission after short delay
   setTimeout(function() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
