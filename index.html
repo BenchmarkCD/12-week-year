@@ -201,10 +201,12 @@ body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:#f
     <div class="auth-logo">📅</div>
     <div class="auth-title">12 Week Year Planner</div>
     <div class="auth-sub">Sign in with Google to access your planner, sync your calendars, and save your data across all devices.</div>
-    <button class="auth-btn" onclick="signIn()">
+    <button class="auth-btn" id="signin-btn" onclick="signIn()">
       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
       Sign in with Google
     </button>
+    <div id="auth-status-msg" style="font-size:12px;color:var(--t2);margin-top:.75rem;display:none"></div>
+    <div id="auth-error-msg" style="font-size:12px;color:#c0392b;margin-top:.75rem;background:#fff5f5;padding:8px 12px;border-radius:6px;display:none"></div>
     <div style="font-size:11px;color:var(--t3);margin-top:1rem">Your data is stored in your own Google Drive. We never see it.</div>
   </div>
 </div>
@@ -2163,23 +2165,43 @@ function initTokenClient() {
     client_id: GCLIENT_ID,
     scope: GSCOPES,
     callback: onTokenResponse,
-    error_callback: function(e) { console.warn('Token error:', e); }
+    error_callback: function(e) {
+      console.warn('Token error:', e);
+      const msg = document.getElementById('auth-error-msg');
+      if (msg) {
+        let text = 'Sign-in failed. ';
+        if (e && e.type === 'popup_closed') text = 'Sign-in popup was closed. Please try again.';
+        else if (e && e.type === 'popup_failed_to_open') text = 'Popup was blocked. Please allow popups for this site and try again.';
+        else if (e && e.type === 'access_denied') text = 'Access denied. Please grant all permissions when prompted.';
+        else if (e) text = 'Error: ' + (e.type || e.message || JSON.stringify(e));
+        msg.textContent = text;
+        msg.style.display = 'block';
+      }
+    }
   });
 }
 
 function signIn() {
-  // If GAPI isn't ready yet, wait for it
+  const statusMsg = document.getElementById('auth-status-msg');
+  const errorMsg = document.getElementById('auth-error-msg');
+  if (errorMsg) errorMsg.style.display = 'none';
+
+  // If GAPI isn't ready yet, show status and wait
   if (!gapiReady) {
+    if (statusMsg) { statusMsg.textContent = 'Loading Google APIs… please wait.'; statusMsg.style.display = 'block'; }
     setTimeout(signIn, 500);
     return;
   }
+  if (statusMsg) statusMsg.style.display = 'none';
+
   // If token client not initialized yet, init it and retry
   if (!gTokenClient) {
     if (typeof google !== 'undefined') {
       initTokenClient();
       setTimeout(signIn, 500);
     } else {
-      setTimeout(signIn, 500);
+      if (statusMsg) { statusMsg.textContent = 'Google Sign-In library not loaded. Check your connection.'; statusMsg.style.display = 'block'; }
+      setTimeout(signIn, 1000);
     }
     return;
   }
@@ -2188,9 +2210,13 @@ function signIn() {
 }
 
 function onTokenResponse(resp) {
-  if (resp.error) { console.warn('Auth error:', resp); return; }
+  if (resp.error) {
+    console.warn('Auth error:', resp);
+    const msg = document.getElementById('auth-error-msg');
+    if (msg) { msg.textContent = 'Sign-in error: ' + (resp.error_description || resp.error); msg.style.display = 'block'; }
+    return;
+  }
   gapi.client.setToken({access_token: resp.access_token});
-  // Fetch user profile
   fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: {Authorization: 'Bearer ' + resp.access_token}
   }).then(function(r) { return r.json(); }).then(function(profile) {
@@ -2202,6 +2228,10 @@ function onTokenResponse(resp) {
     gToken = tok;
     localStorage.setItem('12wy_gtoken', JSON.stringify(tok));
     onSignedIn(profile);
+  }).catch(function(e) {
+    console.warn('Profile fetch error:', e);
+    const msg = document.getElementById('auth-error-msg');
+    if (msg) { msg.textContent = 'Could not fetch profile. Check your connection and try again.'; msg.style.display = 'block'; }
   });
 }
 
