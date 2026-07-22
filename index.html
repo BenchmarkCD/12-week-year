@@ -2043,35 +2043,37 @@ let syncPending = false;
 // Auto-refresh expired token silently
 function refreshTokenIfNeeded(callback) {
   if (!gToken) { callback(false); return; }
-  // If token expires in less than 5 minutes, refresh it
   const fiveMin = 5 * 60 * 1000;
   if (gToken.expiry - Date.now() < fiveMin) {
     console.log('Token expiring soon, refreshing...');
     if (!gTokenClient) { callback(false); return; }
-    // Request new token silently (no prompt)
-    const oldCallback = gTokenClient.callback;
-    gTokenClient.callback = function(resp) {
-      gTokenClient.callback = oldCallback;
-      if (resp.error) { console.warn('Silent refresh failed:', resp); callback(false); return; }
-      gapi.client.setToken({access_token: resp.access_token});
-      const tok = {
-        access_token: resp.access_token,
-        expiry: Date.now() + (resp.expires_in * 1000),
-        profile: gToken.profile
-      };
-      gToken = tok;
-      localStorage.setItem('12wy_gtoken', JSON.stringify(tok));
-      setSyncStatus('synced', '● Synced');
-      callback(true);
-    };
+    // Use a one-time client for silent refresh — don't mutate the shared gTokenClient.callback
     try {
-      gTokenClient.requestAccessToken({prompt: ''});
+      const refreshClient = google.accounts.oauth2.initTokenClient({
+        client_id: GCLIENT_ID,
+        scope: GSCOPES,
+        callback: function(resp) {
+          if (resp.error) { console.warn('Silent refresh failed:', resp); callback(false); return; }
+          gapi.client.setToken({access_token: resp.access_token});
+          const tok = {
+            access_token: resp.access_token,
+            expiry: Date.now() + (resp.expires_in * 1000),
+            profile: gToken.profile
+          };
+          gToken = tok;
+          localStorage.setItem('12wy_gtoken', JSON.stringify(tok));
+          setSyncStatus('synced', '● Synced');
+          callback(true);
+        },
+        error_callback: function(e) { console.warn('Refresh error:', e); callback(false); }
+      });
+      refreshClient.requestAccessToken({prompt: ''});
     } catch(e) {
       console.warn('Token refresh error:', e);
       callback(false);
     }
   } else {
-    callback(true); // Token still valid
+    callback(true);
   }
 }
 
@@ -2102,7 +2104,6 @@ async function withTokenRefresh(fn) {
 }
 // Init once APIs are loaded
 function initGoogleApis() {
-  // Load GAPI
   // Patch sv() to also save to Drive after every local save
   const _origSv = sv;
   sv = function() {
@@ -2115,15 +2116,21 @@ function initGoogleApis() {
 
   gapi.load('client', function() {
     gapi.client.init({
-      apiKey: '',
+      // No apiKey needed — we use OAuth tokens only
       discoveryDocs: [
         'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
         'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
       ]
     }).then(function() {
       gapiReady = true;
+      console.log('GAPI ready');
       tryAutoSignIn();
-    }).catch(function(e) { console.warn('GAPI init:', e); });
+    }).catch(function(e) {
+      console.warn('GAPI init error:', e);
+      // Even if discovery docs fail, mark ready so sign-in can proceed
+      gapiReady = true;
+      tryAutoSignIn();
+    });
   });
 }
 
