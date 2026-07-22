@@ -2161,7 +2161,6 @@ function initTokenClient() {
 }
 
 function signIn() {
-  // If token client not ready yet, init it and retry
   if (!gTokenClient) {
     if (typeof google !== 'undefined') {
       initTokenClient();
@@ -2171,7 +2170,9 @@ function signIn() {
     }
     return;
   }
-  gTokenClient.requestAccessToken({prompt: ''});
+  // Use 'select_account' so the Google account picker always shows.
+  // Empty string prompt silently fails when no session exists.
+  gTokenClient.requestAccessToken({prompt: 'select_account'});
 }
 
 function onTokenResponse(resp) {
